@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Student Progress Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["StyreneB", "Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+              display: ["Copernicus", "Tiempos Headline", "Cormorant Garamond", "EB Garamond", "Garamond", "Times New Roman", "serif"],
+              mono: ["JetBrains Mono", "CohereMono", "Consolas", "monospace"],
+            },
+            boxShadow: {
+              soft: "0 1px 3px rgba(20, 20, 19, 0.08)",
+            },
+            animation: {
+              rise: "rise 0.45s ease-out both",
+            },
+            keyframes: {
+              rise: {
+                "0%": { opacity: "0", transform: "translateY(10px)" },
+                "100%": { opacity: "1", transform: "translateY(0)" },
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      :root {
+        color-scheme: light;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      .dark {
+        color-scheme: dark;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        min-height: 100vh;
+        background: #faf9f5;
+        font-family: StyreneB, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+
+      input,
+      select,
+      textarea,
+      button {
+        font: inherit;
+      }
+
+      .font-display {
+        font-family: Copernicus, "Tiempos Headline", "Cormorant Garamond", "EB Garamond", Garamond, "Times New Roman", serif;
+        font-weight: 400;
+        letter-spacing: -0.025em;
+      }
+
+      @media print {
+        body {
+          background: #faf9f5 !important;
+        }
+
+        .no-print {
+          display: none !important;
+        }
+
+        .print-full {
+          box-shadow: none !important;
+          border: 1px solid #e6dfd8 !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel" src="./src/App.jsx"></script>
+  </body>
+</html>
