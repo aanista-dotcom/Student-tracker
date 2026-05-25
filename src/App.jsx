@@ -284,6 +284,8 @@ function App() {
   const [query, setQuery] = useState("");
   const [dark, setDark] = useState(false);
   const [savedMessage, setSavedMessage] = useState("");
+  const [studentStep, setStudentStep] = useState(0);
+  const [showDetails, setShowDetails] = useState(false);
   const quote = useMemo(() => quotes[new Date().getDate() % quotes.length], []);
   const role = auth?.role || "student";
 
@@ -436,7 +438,6 @@ function App() {
               <button className="text-sm font-medium text-[#141413] dark:text-[#faf9f5]" onClick={logout}>
                 Logout
               </button>
-              <ActionButton icon={Save} label={isFacilitator ? "Save feedback" : "Save"} onClick={saveProgress} primary />
             </div>
           </nav>
 
@@ -455,7 +456,6 @@ function App() {
                   : "A simple daily system for self-care, English confidence, AI practice, theory, practicals, and reflection."}
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <ActionButton icon={Save} label={isFacilitator ? "Save facilitator feedback" : "Save progress"} onClick={saveProgress} primary />
                 <button className="rounded-lg border border-[#e6dfd8] bg-[#faf9f5] px-5 py-3 text-sm font-medium text-[#141413] dark:border-white/10 dark:bg-[#252320] dark:text-[#faf9f5]" onClick={exportPdf}>
                   Export report
                 </button>
@@ -507,7 +507,6 @@ function App() {
               />
             </div>
             <div className="flex flex-wrap gap-2">
-              <ActionButton icon={Save} label={isFacilitator ? "Save feedback" : "Save"} onClick={saveProgress} primary />
               <ActionButton icon={Download} label="Export PDF" onClick={exportPdf} />
               <ActionButton icon={dark ? Sun : Moon} label={dark ? "Light" : "Dark"} onClick={() => setDark((value) => !value)} />
               <button
@@ -523,148 +522,30 @@ function App() {
 
         <section className="grid gap-6 xl:grid-cols-[1fr_360px]">
           <div className="grid gap-6">
-            <Card icon={UserRound} title="1. Student Details" subtitle="Start with the basics for today.">
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Student Name" value={form.studentName} onChange={(value) => update("studentName", value)} placeholder="Enter name" disabled={isStudent} />
-                <Field label="Date" type="date" value={form.date} onChange={(value) => update("date", value)} />
-                {isFacilitator && <Field label="Facilitator Name" value={form.facilitatorName} onChange={(value) => update("facilitatorName", value)} placeholder="Enter facilitator" disabled />}
-                <Field label="School Name" value={form.schoolName} onChange={(value) => update("schoolName", value)} placeholder="School name" />
-                <Select label="Attendance" value={form.attendance} options={attendance} onChange={(value) => update("attendance", value)} />
-                <Select label="Mood of the day" value={form.mood} options={moods} onChange={(value) => update("mood", value)} />
-              </div>
-            </Card>
-
-            {isStudent && (
-              <>
-            <Card icon={HeartHandshake} title="2. Self-Care Tracker" subtitle="A gentle check-in for body, food, rest, and feelings.">
-              <div className="grid gap-5 lg:grid-cols-2">
-                {Object.entries(selfCareChecks).map(([title, labels]) => (
-                  <Checklist key={title} title={title} labels={labels} checks={form.checks} onToggle={toggleCheck} />
-                ))}
-              </div>
-              <div className="mt-5 grid gap-4 md:grid-cols-3">
-                <Select label="Water Intake" value={form.waterIntake} options={waterOptions} onChange={(value) => update("waterIntake", value)} />
-                <Slider label="Emotional wellbeing" value={form.emotionalRating} onChange={(value) => update("emotionalRating", value)} />
-                <ProgressTile label="Self-care completion" value={sectionCompletion(form, Object.values(selfCareChecks).flat())} />
-              </div>
-              {form.checks?.["Took medicine (if prescribed)"] && (
-                <div className="mt-5 grid gap-4 rounded-xl border border-[#e6dfd8] bg-[#efe9de] p-6 dark:border-white/10 dark:bg-[#252320] md:grid-cols-3">
-                  <Field label="Medicine name" value={form.medicineName} onChange={(value) => update("medicineName", value)} />
-                  <Field label="Time taken" type="time" value={form.medicineTime} onChange={(value) => update("medicineTime", value)} />
-                  <Select label="Missed any dose?" value={form.missedDose} options={["No", "Yes"]} onChange={(value) => update("missedDose", value)} />
-                </div>
-              )}
-              <div className="mt-5 grid gap-4 md:grid-cols-2">
-                <Textarea label="What emotions did you feel today?" value={form.emotionsToday} onChange={(value) => update("emotionsToday", value)} />
-                <Textarea label="Were you able to manage your emotions?" value={form.managedEmotions} onChange={(value) => update("managedEmotions", value)} />
-                <Textarea label="Did you ask for help when needed?" value={form.askedForHelp} onChange={(value) => update("askedForHelp", value)} />
-                <Textarea label="One thing that made you happy today" value={form.happyThing} onChange={(value) => update("happyThing", value)} />
-                <Textarea label="One challenge faced today" value={form.challengeFaced} onChange={(value) => update("challengeFaced", value)} />
-              </div>
-            </Card>
-
-            <Card icon={Sparkles} title="3. English Communication Tracker" subtitle="Track practice, new words, and confidence.">
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Select label="English Speaking Percentage" value={form.englishSpeaking} options={englishPercentages} onChange={(value) => update("englishSpeaking", value)} />
-                <Select label="English Level" value={form.englishLevel} options={englishLevels} onChange={(value) => update("englishLevel", value)} />
-                <Slider label="English Confidence" value={form.englishConfidence} onChange={(value) => update("englishConfidence", value)} />
-                <ProgressTile label="Speaking growth" value={parsePercent(form.englishSpeaking)} />
-              </div>
-              <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_1fr]">
-                <Checklist title="Daily English Practice" labels={englishChecks} checks={form.checks} onToggle={toggleCheck} />
-                <div className="grid gap-4">
-                  <Field label="Number of new words learned today" type="number" value={form.newWordsCount} onChange={(value) => update("newWordsCount", value)} />
-                  <Textarea label="Write the new words" value={form.newWords} onChange={(value) => update("newWords", value)} />
-                  <Textarea label="Use one new word in a sentence" value={form.newWordSentence} onChange={(value) => update("newWordSentence", value)} />
-                </div>
-              </div>
-            </Card>
-
-            <Card icon={Sparkles} title="4. AI Tool Usage Tracker" subtitle="Notice what helped, and keep AI use responsible.">
-              <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
-                <Checklist title="AI tools and purpose" labels={aiChecks} checks={form.checks} onToggle={toggleCheck} />
-                <div className="grid gap-4">
-                  <Field label="Which AI tools did you use today?" value={form.aiToolsUsed} onChange={(value) => update("aiToolsUsed", value)} />
-                  <Textarea label="What did you learn from the AI tool?" value={form.aiLearned} onChange={(value) => update("aiLearned", value)} />
-                  <Textarea label="How did the AI tool help you?" value={form.aiHelp} onChange={(value) => update("aiHelp", value)} />
-                  <Select label="Did you use AI responsibly?" value={form.aiResponsible} options={["Yes", "No", "Not sure"]} onChange={(value) => update("aiResponsible", value)} />
-                  <Slider label="Confidence using AI tools" value={form.aiConfidence} onChange={(value) => update("aiConfidence", value)} />
-                </div>
-              </div>
-            </Card>
-
-            <Card icon={CalendarDays} title="5. Theory Learning Tracker" subtitle="Record what was covered and how clear it felt.">
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Topic selected today" value={form.theoryTopic} onChange={(value) => update("theoryTopic", value)} />
-                <Field label="Subtopic covered" value={form.theorySubtopic} onChange={(value) => update("theorySubtopic", value)} />
-                <Textarea label="What did you understand?" value={form.theoryUnderstood} onChange={(value) => update("theoryUnderstood", value)} />
-                <Textarea label="What was difficult?" value={form.theoryDifficult} onChange={(value) => update("theoryDifficult", value)} />
-              </div>
-              <div className="mt-5 grid gap-4 md:grid-cols-3">
-                <Select label="Completion Percentage" value={form.theoryCompletion} options={completionOptions} onChange={(value) => update("theoryCompletion", value)} />
-                <Slider label="Theory Understanding" value={form.theoryUnderstanding} onChange={(value) => update("theoryUnderstanding", value)} />
-                <ProgressTile label="Theory completion" value={parsePercent(form.theoryCompletion)} />
-              </div>
-              <div className="mt-5">
-                <Checklist title="Learning Activities" labels={theoryChecks} checks={form.checks} onToggle={toggleCheck} />
-              </div>
-            </Card>
-
-            <Card icon={Award} title="6. Practical Learning Tracker" subtitle="Track cooking practice, support, safety, and facilitator feedback.">
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Which practical was done today?" value={form.practicalName} onChange={(value) => update("practicalName", value)} />
-                <Textarea label="Steps completed" value={form.practicalSteps} onChange={(value) => update("practicalSteps", value)} />
-                <Textarea label="Tools/materials used" value={form.practicalTools} onChange={(value) => update("practicalTools", value)} />
-                <Textarea label="Challenges faced" value={form.practicalChallenges} onChange={(value) => update("practicalChallenges", value)} />
-                <Textarea label="What did you learn?" value={form.practicalLearned} onChange={(value) => update("practicalLearned", value)} />
-              </div>
-              <div className="mt-5 grid gap-4 md:grid-cols-3">
-                <Select label="Practical Completion" value={form.practicalCompletion} options={completionOptions} onChange={(value) => update("practicalCompletion", value)} />
-                <Slider label="Practical Confidence" value={form.practicalConfidence} onChange={(value) => update("practicalConfidence", value)} />
-                <ProgressTile label="Practical progress" value={parsePercent(form.practicalCompletion)} />
-              </div>
-              <div className="mt-5">
-                <Checklist title="Practical Task Tracking" labels={practicalChecks} checks={form.checks} onToggle={toggleCheck} />
-              </div>
-            </Card>
-
-            <Card icon={HeartHandshake} title="7. Daily Reflection" subtitle="Close the day with a calm student and facilitator reflection.">
-              <div className="grid gap-4 md:grid-cols-2">
-                <Textarea label="What are you proud of today?" value={form.proudToday} onChange={(value) => update("proudToday", value)} />
-                <Textarea label="What do you want to improve tomorrow?" value={form.improveTomorrow} onChange={(value) => update("improveTomorrow", value)} />
-                <Textarea label="What did you enjoy most today?" value={form.enjoyedMost} onChange={(value) => update("enjoyedMost", value)} />
-                <Textarea label="Student participation" value={form.participation} onChange={(value) => update("participation", value)} />
-                <Textarea label="Student discipline" value={form.discipline} onChange={(value) => update("discipline", value)} />
-                <Textarea label="Student communication" value={form.communication} onChange={(value) => update("communication", value)} />
-                <Textarea label="Student improvement areas" value={form.improvementAreas} onChange={(value) => update("improvementAreas", value)} />
-                <Textarea label="Additional comments" value={form.additionalComments} onChange={(value) => update("additionalComments", value)} />
-              </div>
-            </Card>
-
-            <Card icon={BarChart3} title="8. Daily Overall Rating" subtitle="A simple final rating for today's support plan.">
-              <div className="grid gap-4 md:grid-cols-3">
-                <Slider label="Student Self Rating" value={form.studentSelfRating} onChange={(value) => update("studentSelfRating", value)} />
-                <Slider label="Facilitator Rating" value={form.facilitatorRating} onChange={(value) => update("facilitatorRating", value)} />
-                <Select label="Daily Status" value={form.dailyStatus} options={statusOptions} onChange={(value) => update("dailyStatus", value)} />
-              </div>
-            </Card>
-
-            <Card icon={Check} title="Extra Growth Habits" subtitle="Optional life skills and campus behaviour habits.">
-              <div className="grid gap-5 lg:grid-cols-2">
-                <Checklist title="Life Skills" labels={lifeSkillChecks} checks={form.checks} onToggle={toggleCheck} />
-                <Checklist title="Campus Behaviour" labels={campusChecks} checks={form.checks} onToggle={toggleCheck} />
-              </div>
-            </Card>
-              </>
-            )}
-
-            {isFacilitator && (
-              <FacilitatorFeedbackForm
+            {isStudent ? (
+              <StudentQuickFlow
+                form={form}
+                update={update}
+                toggleCheck={toggleCheck}
+                studentStep={studentStep}
+                setStudentStep={setStudentStep}
+                showDetails={showDetails}
+                setShowDetails={setShowDetails}
+                saveProgress={saveProgress}
+              />
+            ) : (
+              <FacilitatorCompactFlow
                 form={form}
                 update={update}
                 setForm={setForm}
+                entries={filteredEntries}
+                loadEntry={loadEntry}
                 cookingRatings={cookingRatings}
                 statusOptions={statusOptions}
+                dailyScore={dailyScore}
+                weeklyScore={weeklyScore}
+                monthlyScore={monthlyScore}
+                saveProgress={saveProgress}
               />
             )}
           </div>
@@ -885,6 +766,281 @@ function FacilitatorFeedbackForm({ form, update, setForm, cookingRatings, status
         </div>
       </Card>
     </>
+  );
+}
+
+function StudentQuickFlow({
+  form,
+  update,
+  toggleCheck,
+  studentStep,
+  setStudentStep,
+  showDetails,
+  setShowDetails,
+  saveProgress,
+}) {
+  const steps = ["Today", "Learning", "Reflection"];
+  const quickHabits = ["Brushed teeth", "Took bath", "Ate breakfast", "Slept properly", "Did exercise/stretching"];
+
+  return (
+    <>
+      <Card icon={UserRound} title="Daily Entry" subtitle={`Step ${studentStep + 1} of 3. Keep it quick and simple.`}>
+        <div className="mb-6 grid gap-2 rounded-xl bg-[#f5f0e8] p-2 dark:bg-[#1f1e1b] sm:grid-cols-3">
+          {steps.map((step, index) => (
+            <button
+              key={step}
+              className={`h-10 rounded-lg text-sm font-medium ${
+                studentStep === index ? "bg-[#cc785c] text-white" : "text-[#6c6a64] dark:text-[#a09d96]"
+              }`}
+              onClick={() => setStudentStep(index)}
+            >
+              {step}
+            </button>
+          ))}
+        </div>
+
+        {studentStep === 0 && (
+          <div className="grid gap-5">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Student Name" value={form.studentName} onChange={(value) => update("studentName", value)} disabled />
+              <Field label="Date" type="date" value={form.date} onChange={(value) => update("date", value)} />
+              <Field label="School Name" value={form.schoolName} onChange={(value) => update("schoolName", value)} placeholder="School name" />
+              <Select label="Attendance" value={form.attendance} options={attendance} onChange={(value) => update("attendance", value)} />
+              <Select label="Mood" value={form.mood} options={moods} onChange={(value) => update("mood", value)} />
+              <Select label="Water" value={form.waterIntake} options={waterOptions} onChange={(value) => update("waterIntake", value)} />
+            </div>
+            <Slider label="Emotional wellbeing" value={form.emotionalRating} onChange={(value) => update("emotionalRating", value)} />
+            <CheckChips title="Quick self-care check" labels={quickHabits} checks={form.checks} onToggle={toggleCheck} />
+          </div>
+        )}
+
+        {studentStep === 1 && (
+          <div className="grid gap-5">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Select label="English speaking" value={form.englishSpeaking} options={englishPercentages} onChange={(value) => update("englishSpeaking", value)} />
+              <Select label="Theory completion" value={form.theoryCompletion} options={completionOptions} onChange={(value) => update("theoryCompletion", value)} />
+              <Select label="Practical completion" value={form.practicalCompletion} options={completionOptions} onChange={(value) => update("practicalCompletion", value)} />
+              <Select
+                label="AI used today?"
+                value={form.aiToolsUsed || "No AI today"}
+                options={["No AI today", "ChatGPT", "Claude", "Gemini", "Canva AI", "Translation tools", "Multiple tools"]}
+                onChange={(value) => update("aiToolsUsed", value)}
+              />
+              <Field label="Theory topic" value={form.theoryTopic} onChange={(value) => update("theoryTopic", value)} placeholder="Topic name" />
+              <Field label="Practical done" value={form.practicalName} onChange={(value) => update("practicalName", value)} placeholder="Practical name" />
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Slider label="English confidence" value={form.englishConfidence} onChange={(value) => update("englishConfidence", value)} />
+              <Slider label="Practical confidence" value={form.practicalConfidence} onChange={(value) => update("practicalConfidence", value)} />
+            </div>
+          </div>
+        )}
+
+        {studentStep === 2 && (
+          <div className="grid gap-5">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Textarea label="One thing I learned today" value={form.practicalLearned} onChange={(value) => update("practicalLearned", value)} />
+              <Textarea label="One challenge I faced" value={form.challengeFaced} onChange={(value) => update("challengeFaced", value)} />
+              <Textarea label="Do I need help?" value={form.askedForHelp} onChange={(value) => update("askedForHelp", value)} />
+              <Textarea label="What am I proud of today?" value={form.proudToday} onChange={(value) => update("proudToday", value)} />
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Slider label="My overall rating" value={form.studentSelfRating} onChange={(value) => update("studentSelfRating", value)} />
+              <Select label="Daily status" value={form.dailyStatus} options={statusOptions} onChange={(value) => update("dailyStatus", value)} />
+            </div>
+          </div>
+        )}
+
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+          <button
+            className="h-10 rounded-lg border border-[#e6dfd8] bg-[#faf9f5] px-5 text-sm font-medium text-[#141413] disabled:opacity-40 dark:border-white/10 dark:bg-[#252320] dark:text-[#faf9f5]"
+            disabled={studentStep === 0}
+            onClick={() => setStudentStep(Math.max(0, studentStep - 1))}
+          >
+            Back
+          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              className="h-10 rounded-lg border border-[#e6dfd8] bg-[#faf9f5] px-5 text-sm font-medium text-[#141413] dark:border-white/10 dark:bg-[#252320] dark:text-[#faf9f5]"
+              onClick={() => setShowDetails((value) => !value)}
+            >
+              {showDetails ? "Hide details" : "Add optional details"}
+            </button>
+            {studentStep < steps.length - 1 ? (
+              <button className="h-10 rounded-lg bg-[#cc785c] px-5 text-sm font-medium text-white" onClick={() => setStudentStep(studentStep + 1)}>
+                Next
+              </button>
+            ) : (
+              <button className="h-10 rounded-lg bg-[#cc785c] px-5 text-sm font-medium text-white" onClick={saveProgress}>
+                Save daily entry
+              </button>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {showDetails && (
+        <Card icon={Check} title="Optional Details" subtitle="Open only the sections that matter today.">
+          <div className="grid gap-3">
+            <DetailSection title="Self-care checklist">
+              <div className="grid gap-5 lg:grid-cols-2">
+                {Object.entries(selfCareChecks).map(([title, labels]) => (
+                  <Checklist key={title} title={title} labels={labels} checks={form.checks} onToggle={toggleCheck} />
+                ))}
+              </div>
+            </DetailSection>
+            <DetailSection title="English vocabulary">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Select label="English level" value={form.englishLevel} options={englishLevels} onChange={(value) => update("englishLevel", value)} />
+                <Field label="New words count" type="number" value={form.newWordsCount} onChange={(value) => update("newWordsCount", value)} />
+                <Textarea label="New words" value={form.newWords} onChange={(value) => update("newWords", value)} />
+                <Textarea label="Use one new word in a sentence" value={form.newWordSentence} onChange={(value) => update("newWordSentence", value)} />
+              </div>
+            </DetailSection>
+            <DetailSection title="Learning notes">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Textarea label="What did I understand in theory?" value={form.theoryUnderstood} onChange={(value) => update("theoryUnderstood", value)} />
+                <Textarea label="What was difficult in theory?" value={form.theoryDifficult} onChange={(value) => update("theoryDifficult", value)} />
+                <Textarea label="Practical steps completed" value={form.practicalSteps} onChange={(value) => update("practicalSteps", value)} />
+                <Textarea label="Tools/materials used" value={form.practicalTools} onChange={(value) => update("practicalTools", value)} />
+              </div>
+            </DetailSection>
+            <DetailSection title="Activities and habits">
+              <div className="grid gap-5 lg:grid-cols-2">
+                <Checklist title="English practice" labels={englishChecks} checks={form.checks} onToggle={toggleCheck} />
+                <Checklist title="AI tools" labels={aiChecks} checks={form.checks} onToggle={toggleCheck} />
+                <Checklist title="Theory activities" labels={theoryChecks} checks={form.checks} onToggle={toggleCheck} />
+                <Checklist title="Life skills" labels={lifeSkillChecks} checks={form.checks} onToggle={toggleCheck} />
+              </div>
+            </DetailSection>
+          </div>
+        </Card>
+      )}
+    </>
+  );
+}
+
+function FacilitatorCompactFlow({
+  form,
+  update,
+  setForm,
+  entries,
+  loadEntry,
+  cookingRatings,
+  statusOptions,
+  dailyScore,
+  weeklyScore,
+  monthlyScore,
+  saveProgress,
+}) {
+  return (
+    <>
+      <Card icon={UserRound} title="Student Review" subtitle="Select a saved student record or create feedback for a new daily record.">
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Student Name" value={form.studentName} onChange={(value) => update("studentName", value)} placeholder="Enter student name" />
+          <Field label="Date" type="date" value={form.date} onChange={(value) => update("date", value)} />
+          <Field label="Facilitator Name" value={form.facilitatorName} onChange={(value) => update("facilitatorName", value)} disabled />
+          <Field label="School Name" value={form.schoolName} onChange={(value) => update("schoolName", value)} placeholder="School name" />
+          <Select label="Attendance" value={form.attendance} options={attendance} onChange={(value) => update("attendance", value)} />
+          <Select label="Mood" value={form.mood} options={moods} onChange={(value) => update("mood", value)} />
+        </div>
+        {entries.length > 0 && (
+          <div className="mt-5">
+            <p className="mb-3 text-sm font-medium text-[#6c6a64] dark:text-[#a09d96]">Recent student records</p>
+            <div className="grid gap-2">
+              {entries.slice(0, 4).map((entry) => (
+                <button
+                  key={entry.id}
+                  className="rounded-lg border border-[#e6dfd8] bg-[#faf9f5] p-3 text-left text-sm dark:border-white/10 dark:bg-[#1f1e1b]"
+                  onClick={() => loadEntry(entry)}
+                >
+                  <span className="font-medium">{entry.studentName || "Unnamed student"}</span>
+                  <span className="ml-2 text-[#6c6a64] dark:text-[#a09d96]">{entry.date} • {getScore(entry)}%</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </Card>
+
+      <Card icon={BarChart3} title="Progress Snapshot" subtitle="A quick view before writing feedback.">
+        <div className="grid gap-4 md:grid-cols-3">
+          <ProgressTile label="Daily progress" value={dailyScore} />
+          <ProgressTile label="Weekly average" value={weeklyScore} />
+          <ProgressTile label="Monthly average" value={monthlyScore} />
+        </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <ProgressTile label="Theory completion" value={parsePercent(form.theoryCompletion)} />
+          <ProgressTile label="Practical completion" value={parsePercent(form.practicalCompletion)} />
+        </div>
+      </Card>
+
+      <Card icon={HeartHandshake} title="Facilitator Feedback" subtitle="Keep feedback short, specific, and supportive.">
+        <div className="grid gap-4 md:grid-cols-2">
+          <Select label="Daily status" value={form.dailyStatus} options={statusOptions} onChange={(value) => update("dailyStatus", value)} />
+          <Slider label="Facilitator rating" value={form.facilitatorRating} onChange={(value) => update("facilitatorRating", value)} />
+          <Textarea label="What was done well?" value={form.practicalDoneWell} onChange={(value) => update("practicalDoneWell", value)} />
+          <Textarea label="What needs improvement?" value={form.practicalNeedsImprovement} onChange={(value) => update("practicalNeedsImprovement", value)} />
+          <Textarea label="Support needed / next step" value={form.improvementAreas} onChange={(value) => update("improvementAreas", value)} />
+          <Textarea label="Additional comments" value={form.additionalComments} onChange={(value) => update("additionalComments", value)} />
+        </div>
+        <DetailSection title="Detailed cooking practical ratings">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {cookingRatings.map((item) => (
+              <Slider
+                key={item}
+                label={item}
+                value={form.facilitatorCooking[item]}
+                onChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    facilitatorCooking: { ...current.facilitatorCooking, [item]: value },
+                  }))
+                }
+              />
+            ))}
+          </div>
+        </DetailSection>
+        <div className="mt-6 flex justify-end">
+          <button className="h-10 rounded-lg bg-[#cc785c] px-5 text-sm font-medium text-white" onClick={saveProgress}>
+            Save facilitator feedback
+          </button>
+        </div>
+      </Card>
+    </>
+  );
+}
+
+function CheckChips({ title, labels, checks, onToggle }) {
+  return (
+    <div className="rounded-xl bg-[#f5f0e8] p-4 dark:bg-[#1f1e1b]">
+      <p className="mb-3 text-sm font-medium text-[#3d3d3a] dark:text-[#faf9f5]">{title}</p>
+      <div className="flex flex-wrap gap-2">
+        {labels.map((label) => {
+          const checked = Boolean(checks?.[label]);
+          return (
+            <button
+              key={label}
+              className={`rounded-full px-4 py-2 text-sm font-medium ${
+                checked ? "bg-[#cc785c] text-white" : "bg-[#faf9f5] text-[#3d3d3a] dark:bg-[#252320] dark:text-[#faf9f5]"
+              }`}
+              onClick={() => onToggle(label)}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DetailSection({ title, children }) {
+  return (
+    <details className="rounded-xl bg-[#f5f0e8] p-4 dark:bg-[#1f1e1b]">
+      <summary className="cursor-pointer text-sm font-medium text-[#141413] dark:text-[#faf9f5]">{title}</summary>
+      <div className="mt-4">{children}</div>
+    </details>
   );
 }
 
