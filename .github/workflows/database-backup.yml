@@ -1,0 +1,98 @@
+name: Encrypted database backup
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_kind:
+        description: "Backup kind"
+        required: true
+        default: "manual"
+        type: choice
+        options:
+          - manual
+          - daily
+          - weekly
+  schedule:
+    # 00:15 IST every day.
+    - cron: "45 18 * * *"
+    # 00:45 IST every Sunday.
+    - cron: "15 19 * * 0"
+
+concurrency:
+  group: student-tracker-database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      BACKUP_GPG_PASSPHRASE: ${{ secrets.BACKUP_GPG_PASSPHRASE }}
+      AWS_BACKUP_BUCKET: ${{ secrets.AWS_BACKUP_BUCKET }}
+      AWS_BACKUP_PREFIX: ${{ secrets.AWS_BACKUP_PREFIX }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Decide backup kind
+        id: kind
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "kind=${{ inputs.backup_kind }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "15 19 * * 0" ]; then
+            echo "kind=weekly" >> "$GITHUB_OUTPUT"
+          else
+            echo "kind=daily" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install database tools
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client gnupg
+
+      - name: Create encrypted backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p backups
+          BACKUP_NAME="student-tracker-${{ steps.kind.outputs.kind }}-$(date -u +'%Y%m%d-%H%M%S')"
+          LOG_FILE="backups/${BACKUP_NAME}.log"
+          {
+            echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ') Starting backup ${BACKUP_NAME}"
+            test -n "$DATABASE_URL"
+            test -n "$BACKUP_GPG_PASSPHRASE"
+            pg_dump "$DATABASE_URL" --format=plain --clean --if-exists --no-owner --file "backups/${BACKUP_NAME}.sql"
+            gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase "$BACKUP_GPG_PASSPHRASE" --output "backups/${BACKUP_NAME}.sql.gpg" "backups/${BACKUP_NAME}.sql"
+            rm "backups/${BACKUP_NAME}.sql"
+            echo "BACKUP_FILE=backups/${BACKUP_NAME}.sql.gpg" >> "$GITHUB_ENV"
+            echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ') Backup encrypted successfully"
+          } 2>&1 | tee "$LOG_FILE"
+
+      - name: Upload encrypted backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-database-backup
+          path: |
+            backups/*.gpg
+            backups/*.log
+          retention-days: 30
+
+      - name: Configure AWS credentials for off-site backup
+        if: env.AWS_BACKUP_BUCKET != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Copy encrypted backup to S3/R2
+        if: env.AWS_BACKUP_BUCKET != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          PREFIX="${AWS_BACKUP_PREFIX:-student-tracker}"
+          aws s3 cp "$BACKUP_FILE" "s3://${AWS_BACKUP_BUCKET}/${PREFIX}/$(basename "$BACKUP_FILE")" --only-show-errors

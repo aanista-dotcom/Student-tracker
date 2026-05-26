@@ -1,5 +1,7 @@
 {
   "scripts": {
-    "start": "node server.cjs"
+    "start": "node server.cjs",
+    "backup:manual": "powershell -ExecutionPolicy Bypass -File scripts/backup.ps1 -Kind manual",
+    "restore": "powershell -ExecutionPolicy Bypass -File scripts/restore.ps1"
   }
 }

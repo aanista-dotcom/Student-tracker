@@ -271,6 +271,57 @@ function isThisMonth(entry) {
   return entryDate.getFullYear() === now.getFullYear() && entryDate.getMonth() === now.getMonth();
 }
 
+function getAppConfig() {
+  return window.APP_CONFIG || {};
+}
+
+function getSupabaseClient() {
+  const config = getAppConfig();
+  if (config.persistenceMode !== "supabase" || !config.supabaseUrl || !config.supabaseAnonKey || !window.supabase) {
+    return null;
+  }
+  if (!window.studentTrackerSupabaseClient) {
+    window.studentTrackerSupabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+  }
+  return window.studentTrackerSupabaseClient;
+}
+
+function getSupabaseTable() {
+  return getAppConfig().supabaseTable || "student_progress_entries";
+}
+
+function toDatabaseRow(entry, role) {
+  return {
+    id: entry.id,
+    student_name: entry.studentName || "",
+    facilitator_name: entry.facilitatorName || "",
+    school_name: entry.schoolName || "",
+    entry_date: entry.date || today(),
+    last_updated_by: role || entry.lastUpdatedBy || "unknown",
+    payload: entry,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+async function loadCloudEntries() {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  const { data, error } = await client
+    .from(getSupabaseTable())
+    .select("id,payload,entry_date,updated_at")
+    .order("entry_date", { ascending: false });
+  if (error) throw error;
+  return (data || []).map((row) => normalizeEntry({ ...row.payload, id: row.id }));
+}
+
+async function upsertCloudEntry(entry, role) {
+  const client = getSupabaseClient();
+  if (!client) return { skipped: true };
+  const { error } = await client.from(getSupabaseTable()).upsert(toDatabaseRow(entry, role), { onConflict: "id" });
+  if (error) throw error;
+  return { skipped: false };
+}
+
 function App() {
   const [entries, setEntries] = useState([]);
   const [form, setForm] = useState(emptyForm);
@@ -290,14 +341,27 @@ function App() {
   const role = auth?.role || "student";
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
+    let cancelled = false;
+    const loadEntries = async () => {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      let localEntries = [];
       try {
-        setEntries(JSON.parse(saved).map(normalizeEntry));
-      } catch {
-        setEntries([]);
+        localEntries = saved ? JSON.parse(saved).map(normalizeEntry) : [];
+        if (!cancelled) setEntries(localEntries);
+        const cloudEntries = await loadCloudEntries();
+        if (!cancelled && cloudEntries) {
+          setEntries(cloudEntries);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudEntries));
+        }
+      } catch (error) {
+        console.error("[persistence] Could not load cloud data. Local cache is still available.", error);
+        if (!cancelled) setEntries(localEntries);
       }
-    }
+    };
+    loadEntries();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -381,13 +445,23 @@ function App() {
     }));
   };
 
-  const saveProgress = () => {
+  const saveProgress = async () => {
     const entry = { ...form, id: `${form.studentName || "student"}-${form.date}`, lastUpdatedBy: role, savedAt: new Date().toISOString() };
     setEntries((current) => {
       const withoutCurrent = current.filter((item) => item.id !== entry.id);
       return [entry, ...withoutCurrent].sort((a, b) => new Date(b.date) - new Date(a.date));
     });
-    setSavedMessage(isFacilitator ? "Facilitator feedback saved on this device." : "Student progress saved on this device.");
+    try {
+      const cloudSave = await upsertCloudEntry(entry, role);
+      if (cloudSave.skipped) {
+        setSavedMessage(isFacilitator ? "Facilitator feedback saved locally." : "Student progress saved locally.");
+      } else {
+        setSavedMessage(isFacilitator ? "Facilitator feedback saved to database." : "Student progress saved to database.");
+      }
+    } catch (error) {
+      console.error("[persistence] Cloud save failed. Entry was kept in local browser backup.", error);
+      setSavedMessage("Saved locally. Cloud database sync failed; check logs/config.");
+    }
     setTimeout(() => setSavedMessage(""), 2200);
   };
 
