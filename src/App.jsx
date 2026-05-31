@@ -755,6 +755,7 @@ function App() {
   const [dark, setDark] = useState(false);
   const [savedMessage, setSavedMessage] = useState("");
   const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
+  const [storageMode, setStorageMode] = useState("local"); // local | cloud | error
   const [celebrate, setCelebrate] = useState(false);
   const [celebrateKey, setCelebrateKey] = useState(0);
   const [studentStep, setStudentStep] = useState(0);
@@ -773,11 +774,17 @@ function App() {
         const cloudEntries = await loadCloudEntries();
         if (!cancelled && cloudEntries) {
           setEntries(cloudEntries);
+          setStorageMode("cloud");
           localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudEntries));
+        } else if (!cancelled) {
+          setStorageMode("local");
         }
       } catch (error) {
         console.error("[persistence] Could not load cloud data. Local cache is still available.", error);
-        if (!cancelled) setEntries(localEntries);
+        if (!cancelled) {
+          setEntries(localEntries);
+          setStorageMode("error");
+        }
       }
     };
     loadEntries();
@@ -879,16 +886,27 @@ function App() {
     try {
       const cloudSave = await upsertCloudEntry(entry, role);
       if (cloudSave.skipped) {
-        setSavedMessage(isFacilitator ? "Facilitator feedback saved locally." : "Student progress saved locally.");
+        setStorageMode("local");
+        setSavedMessage(
+          isFacilitator
+            ? "Feedback saved on this device only (cloud not connected)."
+            : "Saved on this device only (cloud not connected).",
+        );
       } else {
-        setSavedMessage(isFacilitator ? "Facilitator feedback saved to database." : "Student progress saved to database.");
+        setStorageMode("cloud");
+        setSavedMessage(
+          isFacilitator
+            ? `Feedback saved to the cloud for ${entry.studentName || "this student"}.`
+            : "Saved to the cloud — your facilitator can now see this.",
+        );
       }
       setSaveState("saved");
       setCelebrateKey((value) => value + 1);
       setCelebrate(true);
     } catch (error) {
       console.error("[persistence] Cloud save failed. Entry was kept in local browser backup.", error);
-      setSavedMessage("Saved locally. Cloud database sync failed; check logs/config.");
+      setStorageMode("error");
+      setSavedMessage("Saved on this device. Cloud sync failed — check your connection.");
       setSaveState("error");
     }
     setTimeout(() => {
@@ -916,6 +934,11 @@ function App() {
     window.print();
   };
 
+  const scrollToId = (id) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   if (!auth) {
     return <LoginScreen onLogin={login} />;
   }
@@ -937,9 +960,15 @@ function App() {
               <span className="text-sm font-medium text-[#141413] dark:text-[#faf9f5]">Student Progress</span>
             </div>
             <div className="hidden items-center gap-6 text-sm font-medium text-[#6c6a64] md:flex">
-              <span>{isStudent ? "Student form" : "Facilitator form"}</span>
-              <span>Analytics</span>
-              <span>Reports</span>
+              <button className="transition hover:text-[#cc785c]" onClick={() => scrollToId("tracker")}>
+                {isStudent ? "Student form" : "Facilitator form"}
+              </button>
+              <button className="transition hover:text-[#cc785c]" onClick={() => scrollToId("analytics")}>
+                Analytics
+              </button>
+              <button className="transition hover:text-[#cc785c]" onClick={() => scrollToId("reports")}>
+                Reports
+              </button>
             </div>
             <div className="flex items-center gap-3">
               <span className="hidden rounded-full bg-[#efe9de] px-3 py-2 text-sm font-medium capitalize text-[#141413] dark:bg-[#252320] dark:text-[#faf9f5] md:inline-flex">
@@ -1020,7 +1049,8 @@ function App() {
                 onChange={(event) => setQuery(event.target.value)}
               />
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <StorageBadge mode={storageMode} />
               <ActionButton icon={Download} label="Export PDF" onClick={exportPdf} />
               <ActionButton icon={dark ? Sun : Moon} label={dark ? "Light" : "Dark"} onClick={() => setDark((value) => !value)} />
               <button
@@ -1034,7 +1064,7 @@ function App() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1fr_360px]">
-          <div className="grid gap-6">
+          <div id="tracker" className="grid gap-6 scroll-mt-24">
             {isStudent ? (
               <StudentQuickFlow
                 form={form}
@@ -1066,7 +1096,7 @@ function App() {
           </div>
 
           <aside className="grid content-start gap-6">
-            <Card icon={BarChart3} title="9. Dashboard & Analytics" subtitle="Live summary from saved and current progress." dark>
+            <Card id="analytics" icon={BarChart3} title="Dashboard & Analytics" subtitle="Live summary from saved and current progress." dark>
               <div className="grid gap-4">
                 <ProgressTile label="Overall progress" value={score} large dark index={0} />
                 <ProgressTile label="Daily recorded progress" value={dailyScore} helper={`${filteredEntries.length ? latestEntry.date : "Today"}`} dark index={1} />
@@ -1134,7 +1164,7 @@ function App() {
               <AttendanceDots entries={weeklyEntries} dark />
             </Card>
 
-            <Card icon={Search} title={isFacilitator ? "All Student Progress" : "My Saved Progress"} subtitle="Tap any saved day to review or update it.">
+            <Card id="reports" icon={Search} title={isFacilitator ? "All Student Progress" : "My Saved Progress"} subtitle="Tap any saved day to review or export it as a PDF report.">
               <div className="grid gap-3">
                 {filteredEntries.length === 0 && <p className="text-sm text-[#6c6a64] dark:text-[#a09d96]">No saved days yet. Fill the form and press Save.</p>}
                 {filteredEntries.slice(0, isFacilitator ? 20 : 8).map((entry) => (
@@ -1214,6 +1244,24 @@ function CelebrationOverlay({ dark, replayKey, onClose }) {
   );
 }
 
+function StorageBadge({ mode }) {
+  const map = {
+    cloud: { text: "Cloud synced", color: "#5b8c5a", dot: "#5b8c5a", title: "Saved to the shared cloud database — facilitators can see student entries." },
+    local: { text: "On this device", color: "#8e8b82", dot: "#d9a441", title: "Saved only in this browser. Cloud database is not connected." },
+    error: { text: "Cloud error", color: "#c96442", dot: "#c96442", title: "Could not reach the cloud database. Entries are kept on this device for now." },
+  };
+  const m = map[mode] || map.local;
+  return (
+    <span
+      className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e6dfd8] bg-[#faf9f5] px-3 text-sm font-medium dark:border-white/10 dark:bg-[#252320]"
+      title={m.title}
+    >
+      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: m.dot }} />
+      <span style={{ color: m.color }}>{m.text}</span>
+    </span>
+  );
+}
+
 function Toast({ message, state }) {
   if (!message) return null;
   const isError = state === "error";
@@ -1239,10 +1287,10 @@ function Toast({ message, state }) {
   );
 }
 
-function Card({ icon: Icon, title, subtitle, children, dark = false }) {
+function Card({ icon: Icon, title, subtitle, children, dark = false, id }) {
   const shell = dark
-    ? "print-full animate-rise rounded-xl bg-[#181715] p-6 text-[#faf9f5] sm:p-8"
-    : "print-full animate-rise rounded-xl bg-[#efe9de] p-6 dark:bg-[#252320] sm:p-8";
+    ? "print-full animate-rise scroll-mt-24 rounded-xl bg-[#181715] p-6 text-[#faf9f5] sm:p-8"
+    : "print-full animate-rise scroll-mt-24 rounded-xl bg-[#efe9de] p-6 dark:bg-[#252320] sm:p-8";
   const iconShell = dark
     ? "grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#252320] text-[#cc785c]"
     : "grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#faf9f5] text-[#cc785c] dark:bg-[#181715] dark:text-[#cc785c]";
@@ -1251,7 +1299,7 @@ function Card({ icon: Icon, title, subtitle, children, dark = false }) {
     : "font-display text-3xl font-normal leading-tight tracking-[-0.02em] text-[#141413] dark:text-[#faf9f5]";
   const subtitleClass = dark ? "mt-1 text-sm leading-6 text-[#a09d96]" : "mt-1 text-sm leading-6 text-[#6c6a64] dark:text-[#a09d96]";
   return (
-    <section className={shell}>
+    <section className={shell} id={id}>
       <div className="mb-5 flex items-start gap-3">
         <div className={iconShell}>
           <Icon size={22} />
@@ -1540,6 +1588,110 @@ function StudentQuickFlow({
   );
 }
 
+function ReadField({ label, value }) {
+  if (value === undefined || value === null || String(value).trim() === "") return null;
+  return (
+    <div className="rounded-lg bg-[#f5f0e8] p-3 dark:bg-[#1f1e1b]">
+      <p className="text-xs font-medium uppercase tracking-[1px] text-[#8e8b82]">{label}</p>
+      <p className="mt-1 text-sm leading-6 text-[#141413] dark:text-[#faf9f5]">{value}</p>
+    </div>
+  );
+}
+
+function SectionBar({ label, value }) {
+  const v = Math.max(0, Math.min(100, Math.round(value || 0)));
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-sm">
+        <span className="text-[#3d3d3a] dark:text-[#a09d96]">{label}</span>
+        <span className="font-mono tabular-nums" style={{ color: progressColor(v) }}>{v}%</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-[#e6dfd8] dark:bg-white/15">
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${v}%`, backgroundColor: progressColor(v) }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// Read-only view of what a student actually submitted, for facilitators.
+function StudentSubmissionView({ form }) {
+  const loaded = Boolean(form.id || form.savedAt);
+  if (!loaded) {
+    return (
+      <Card icon={UserRound} title="Student Submission" subtitle="See exactly what a student filled in.">
+        <p className="rounded-xl bg-[#f5f0e8] p-4 text-sm leading-6 text-[#6c6a64] dark:bg-[#1f1e1b] dark:text-[#a09d96]">
+          Pick a student from <span className="font-medium">“Recent student records”</span> above, or from{" "}
+          <span className="font-medium">“All Student Progress”</span> on the right, to see their answers, checklists,
+          reflections, and overall progress here.
+        </p>
+      </Card>
+    );
+  }
+  const overall = getScore(form);
+  const sections = [
+    { label: "Self-care & wellbeing", value: sectionCompletion(form, Object.values(selfCareChecks).flat()) },
+    { label: "English practice", value: sectionCompletion(form, englishChecks) },
+    { label: "AI tools", value: sectionCompletion(form, aiChecks) },
+    { label: "Theory", value: sectionCompletion(form, theoryChecks) },
+    { label: "Practical", value: sectionCompletion(form, practicalChecks) },
+    { label: "Life skills", value: sectionCompletion(form, lifeSkillChecks) },
+    { label: "Campus discipline", value: sectionCompletion(form, campusChecks) },
+  ];
+  return (
+    <Card
+      icon={UserRound}
+      title="Student Submission"
+      subtitle={`What ${form.studentName || "the student"} filled in on ${form.date}.`}
+    >
+      <div className="mb-6 grid gap-3 sm:grid-cols-4">
+        <div className="rounded-xl bg-[#181715] p-4 text-center text-[#faf9f5]">
+          <p className="text-xs uppercase tracking-[1.5px] text-[#a09d96]">Overall</p>
+          <p className="font-display text-4xl tabular-nums" style={{ color: progressColor(overall) }}>
+            {overall}%
+          </p>
+        </div>
+        <ReadField label="Attendance" value={form.attendance} />
+        <ReadField label="Mood" value={form.mood} />
+        <ReadField label="Water intake" value={form.waterIntake} />
+      </div>
+
+      <p className="mb-3 text-sm font-medium text-[#6c6a64] dark:text-[#a09d96]">Checklist completion</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {sections.map((section) => (
+          <SectionBar key={section.label} label={section.label} value={section.value} />
+        ))}
+      </div>
+
+      <p className="mb-3 mt-6 text-sm font-medium text-[#6c6a64] dark:text-[#a09d96]">Student self-ratings (out of 10)</p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <ReadField label="Wellbeing" value={`${form.emotionalRating}/10`} />
+        <ReadField label="English confidence" value={`${form.englishConfidence}/10`} />
+        <ReadField label="AI confidence" value={`${form.aiConfidence}/10`} />
+        <ReadField label="Theory understanding" value={`${form.theoryUnderstanding}/10`} />
+        <ReadField label="Practical confidence" value={`${form.practicalConfidence}/10`} />
+        <ReadField label="Self rating" value={`${form.studentSelfRating}/10`} />
+      </div>
+
+      <p className="mb-3 mt-6 text-sm font-medium text-[#6c6a64] dark:text-[#a09d96]">In the student's words</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <ReadField label="Proud of today" value={form.proudToday} />
+        <ReadField label="Wants to improve tomorrow" value={form.improveTomorrow} />
+        <ReadField label="Enjoyed most" value={form.enjoyedMost} />
+        <ReadField label="A happy thing" value={form.happyThing} />
+        <ReadField label="A challenge faced" value={form.challengeFaced} />
+        <ReadField label="Emotions today" value={form.emotionsToday} />
+        <ReadField label="New words learned" value={form.newWords} />
+        <ReadField label="Theory topic" value={form.theoryTopic} />
+        <ReadField label="Practical / dish" value={form.practicalName} />
+        <ReadField label="AI tools used" value={form.aiToolsUsed} />
+      </div>
+    </Card>
+  );
+}
+
 function FacilitatorCompactFlow({
   form,
   update,
@@ -1583,6 +1735,8 @@ function FacilitatorCompactFlow({
           </div>
         )}
       </Card>
+
+      <StudentSubmissionView form={form} />
 
       <Card icon={BarChart3} title="Progress Snapshot" subtitle="A quick view before writing feedback.">
         <div className="grid gap-4 md:grid-cols-3">
