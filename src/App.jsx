@@ -1,29 +1,133 @@
-const { useEffect, useMemo, useState } = React;
+const { useEffect, useMemo, useRef, useState } = React;
 
-function IconGlyph({ label, className = "", size = 22 }) {
+// Lucide-style line icons. Color follows the parent's text color via currentColor,
+// so existing `text-[...]` classes on icon shells keep working.
+function Icon({ children, className = "", size = 22, strokeWidth = 2 }) {
   return (
-    <span
+    <svg
       aria-hidden="true"
-      className={`inline-grid place-items-center rounded-full font-black ${className}`}
-      style={{ width: size, height: size, fontSize: Math.max(12, size * 0.58) }}
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
     >
-      {label}
-    </span>
+      {children}
+    </svg>
   );
 }
 
-const Award = (props) => <IconGlyph label="A" {...props} />;
-const BarChart3 = (props) => <IconGlyph label="%" {...props} />;
-const CalendarDays = (props) => <IconGlyph label="D" {...props} />;
-const Check = (props) => <IconGlyph label="✓" {...props} />;
-const Download = (props) => <IconGlyph label="↓" {...props} />;
-const HeartHandshake = (props) => <IconGlyph label="H" {...props} />;
-const Moon = (props) => <IconGlyph label="☾" {...props} />;
-const Save = (props) => <IconGlyph label="S" {...props} />;
-const Search = (props) => <IconGlyph label="⌕" {...props} />;
-const Sparkles = (props) => <IconGlyph label="*" {...props} />;
-const Sun = (props) => <IconGlyph label="☼" {...props} />;
-const UserRound = (props) => <IconGlyph label="U" {...props} />;
+const Award = (props) => (
+  <Icon {...props}>
+    <circle cx="12" cy="8" r="6" />
+    <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
+  </Icon>
+);
+const BarChart3 = (props) => (
+  <Icon {...props}>
+    <path d="M3 3v18h18" />
+    <path d="M18 17V9" />
+    <path d="M13 17V5" />
+    <path d="M8 17v-3" />
+  </Icon>
+);
+const CalendarDays = (props) => (
+  <Icon {...props}>
+    <path d="M8 2v4" />
+    <path d="M16 2v4" />
+    <rect width="18" height="18" x="3" y="4" rx="2" />
+    <path d="M3 10h18" />
+  </Icon>
+);
+const Check = (props) => (
+  <Icon {...props}>
+    <path d="M20 6 9 17l-5-5" />
+  </Icon>
+);
+const CheckCircle = (props) => (
+  <Icon {...props}>
+    <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+    <path d="m9 11 3 3L22 4" />
+  </Icon>
+);
+const Download = (props) => (
+  <Icon {...props}>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" x2="12" y1="15" y2="3" />
+  </Icon>
+);
+const Flame = (props) => (
+  <Icon {...props}>
+    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+  </Icon>
+);
+const HeartHandshake = (props) => (
+  <Icon {...props}>
+    <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+  </Icon>
+);
+const Loader = (props) => (
+  <Icon {...props}>
+    <path d="M12 2v4" />
+    <path d="m16.2 7.8 2.9-2.9" />
+    <path d="M18 12h4" />
+    <path d="m16.2 16.2 2.9 2.9" />
+    <path d="M12 18v4" />
+    <path d="m4.9 19.1 2.9-2.9" />
+    <path d="M2 12h4" />
+    <path d="m4.9 4.9 2.9 2.9" />
+  </Icon>
+);
+const Moon = (props) => (
+  <Icon {...props}>
+    <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+  </Icon>
+);
+const Save = (props) => (
+  <Icon {...props}>
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+    <polyline points="17 21 17 13 7 13 7 21" />
+    <polyline points="7 3 7 8 15 8" />
+  </Icon>
+);
+const Search = (props) => (
+  <Icon {...props}>
+    <circle cx="11" cy="11" r="8" />
+    <path d="m21 21-4.3-4.3" />
+  </Icon>
+);
+const Sparkles = (props) => (
+  <Icon {...props}>
+    <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+    <path d="M20 3v4" />
+    <path d="M22 5h-4" />
+  </Icon>
+);
+const Sun = (props) => (
+  <Icon {...props}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2" />
+    <path d="M12 20v2" />
+    <path d="m4.93 4.93 1.41 1.41" />
+    <path d="m17.66 17.66 1.41 1.41" />
+    <path d="M2 12h2" />
+    <path d="M20 12h2" />
+    <path d="m6.34 17.66-1.41 1.41" />
+    <path d="m19.07 4.93-1.41 1.41" />
+  </Icon>
+);
+const UserRound = (props) => (
+  <Icon {...props}>
+    <circle cx="12" cy="8" r="5" />
+    <path d="M20 21a8 8 0 0 0-16 0" />
+  </Icon>
+);
 
 const STORAGE_KEY = "student-progress-tracker:v5";
 const ROLE_KEY = "student-progress-tracker:role:v2";
@@ -199,6 +303,321 @@ const emptyForm = {
   dailyStatus: "Good",
 };
 
+// Color-code progress by value: green (strong) / gold (mid) / coral (low).
+function progressColor(value) {
+  if (value >= 75) return "#5b8c5a";
+  if (value >= 40) return "#d9a441";
+  return "#c96442";
+}
+
+// Animate a number from 0 to `target` once it mounts / when target changes.
+function useCountUp(target, duration = 900) {
+  const [display, setDisplay] = useState(0);
+  const fromRef = useRef(0);
+  useEffect(() => {
+    const reduce =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const end = Number(target) || 0;
+    const start = fromRef.current;
+    if (reduce || start === end) {
+      setDisplay(end);
+      fromRef.current = end;
+      return;
+    }
+    let raf;
+    const startTime = performance.now();
+    const tick = (now) => {
+      const t = Math.min(1, (now - startTime) / duration);
+      const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      setDisplay(Math.round(start + (end - start) * eased));
+      if (t < 1) {
+        raf = requestAnimationFrame(tick);
+      } else {
+        fromRef.current = end;
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return display;
+}
+
+// ---- Growing tree engine (pure canvas, no libraries) ----
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hexToRgb(hex) {
+  const h = hex.replace("#", "");
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
+function mixHex(a, b, t) {
+  const ca = hexToRgb(a);
+  const cb = hexToRgb(b);
+  const r = Math.round(ca[0] + (cb[0] - ca[0]) * t);
+  const g = Math.round(ca[1] + (cb[1] - ca[1]) * t);
+  const bl = Math.round(ca[2] + (cb[2] - ca[2]) * t);
+  return `rgb(${r}, ${g}, ${bl})`;
+}
+
+const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+// Palette-aligned tree colors (warm-brown wood -> brand coral tips, accent greens, gold).
+function treePalette(dark) {
+  return dark
+    ? {
+        bgTop: "#202b33",
+        bgBottom: "#1a1816",
+        woodDark: "#4a3122",
+        woodLight: "#c96442",
+        greens: ["#6fa06a", "#5b8c5a", "#7cae74", "#86b97e", "#4f8050"],
+        gold: "#e0b057",
+        ground: "rgba(0, 0, 0, 0.28)",
+      }
+    : {
+        bgTop: "#e8eef3",
+        bgBottom: "#faf9f5",
+        woodDark: "#5b3a29",
+        woodLight: "#c96442",
+        greens: ["#5b8c5a", "#6fa06a", "#4a7a49", "#7cae74", "#88b97f"],
+        gold: "#d9a441",
+        ground: "rgba(20, 20, 19, 0.10)",
+      };
+}
+
+function buildTree({ rng, cx, baseY, trunkLen, trunkThick, maxDepth, spread, greens, gold }) {
+  const branches = [];
+  const leaves = [];
+  const bands = maxDepth + 1;
+  const branchSpan = 0.82; // branches finish growing by 82% of the timeline...
+  function grow(x, y, angle, len, thick, depth) {
+    const ex = x + Math.cos(angle) * len;
+    const ey = y + Math.sin(angle) * len;
+    const jitter = ((rng() * 0.4) / bands) * branchSpan;
+    const tStart = (depth / bands) * branchSpan + jitter;
+    const tEnd = Math.min(branchSpan, ((depth + 1) / bands) * branchSpan + jitter);
+    branches.push({ x1: x, y1: y, x2: ex, y2: ey, thick, depth, tStart, tEnd });
+    const terminal = depth >= maxDepth || thick < 1.3;
+    if (terminal) {
+      const n = 2 + Math.floor(rng() * 3);
+      for (let i = 0; i < n; i++) {
+        const useGold = rng() < 0.08;
+        leaves.push({
+          x: ex + (rng() - 0.5) * len * 0.6,
+          y: ey + (rng() - 0.5) * len * 0.6,
+          maxR: 4 + rng() * 6,
+          color: useGold ? gold : greens[Math.floor(rng() * greens.length)],
+          // ...leaves bloom in the remaining window after their branch finishes.
+          tStart: Math.min(0.96, tEnd + rng() * 0.04),
+        });
+      }
+      return;
+    }
+    const nChildren = depth < 3 && rng() < 0.3 ? 3 : 2;
+    for (let i = 0; i < nChildren; i++) {
+      let dir;
+      if (nChildren === 2) dir = i === 0 ? -1 : 1;
+      else dir = i === 0 ? -1 : i === 1 ? 1 : (rng() - 0.5) * 1.5;
+      const angleOffset = (spread * 0.45 + rng() * spread * 0.5) * dir;
+      const childLen = len * (0.72 + rng() * 0.12);
+      const childThick = thick * (0.66 + rng() * 0.12);
+      grow(ex, ey, angle + angleOffset, childLen, childThick, depth + 1);
+    }
+  }
+  grow(cx, baseY, -Math.PI / 2 + (rng() - 0.5) * 0.06, trunkLen, trunkThick, 0);
+  return { branches, leaves };
+}
+
+function useElementSize() {
+  const ref = useRef(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    if (!ref.current) return;
+    const el = ref.current;
+    const update = () => setSize({ width: el.clientWidth, height: el.clientHeight });
+    update();
+    let ro;
+    if (window.ResizeObserver) {
+      ro = new ResizeObserver(update);
+      ro.observe(el);
+    } else {
+      window.addEventListener("resize", update);
+    }
+    return () => {
+      if (ro) ro.disconnect();
+      else window.removeEventListener("resize", update);
+    };
+  }, []);
+  return [ref, size];
+}
+
+function GrowingTree({
+  progress = 1,
+  duration = 12000,
+  dark = false,
+  transparent = false,
+  seed = 1,
+  replayKey = 0,
+  fullscreen = false,
+  onDone,
+}) {
+  const [ref, size] = useElementSize();
+  const canvasRef = useRef(null);
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !size.width || !size.height) return;
+    const ctx = canvas.getContext("2d");
+    const w = size.width;
+    const h = size.height;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const pal = treePalette(dark);
+    const p = Math.max(0, Math.min(1, progress));
+    const depth = fullscreen ? 9 : Math.round(3 + p * 5);
+    const cx = w / 2;
+    const baseY = h - Math.max(8, h * 0.02);
+    const trunkLen = h * (fullscreen ? 0.2 : 0.22);
+    const trunkThick = Math.max(5, h * (fullscreen ? 0.018 : 0.022));
+
+    const rng = mulberry32(seed + replayKey * 1000 + depth);
+    const { branches, leaves } = buildTree({
+      rng,
+      cx,
+      baseY,
+      trunkLen,
+      trunkThick,
+      maxDepth: depth,
+      spread: 0.8,
+      greens: pal.greens,
+      gold: pal.gold,
+    });
+
+    const drawBackground = () => {
+      if (transparent) {
+        ctx.clearRect(0, 0, w, h);
+        return;
+      }
+      const g = ctx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, pal.bgTop);
+      g.addColorStop(1, pal.bgBottom);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+    };
+
+    const render = (t) => {
+      drawBackground();
+      // soft ground shadow
+      ctx.save();
+      ctx.fillStyle = pal.ground;
+      ctx.beginPath();
+      ctx.ellipse(cx, baseY + 2, Math.max(20, w * 0.12), Math.max(5, h * 0.015), 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      // branches (parent-before-child draw order)
+      ctx.lineCap = "round";
+      for (let i = 0; i < branches.length; i++) {
+        const b = branches[i];
+        if (t < b.tStart) continue;
+        const local = b.tEnd > b.tStart ? Math.min(1, (t - b.tStart) / (b.tEnd - b.tStart)) : 1;
+        const e = easeOutCubic(local);
+        const x2 = b.x1 + (b.x2 - b.x1) * e;
+        const y2 = b.y1 + (b.y2 - b.y1) * e;
+        ctx.strokeStyle = mixHex(pal.woodDark, pal.woodLight, depth ? b.depth / depth : 0);
+        ctx.lineWidth = Math.max(0.6, b.thick);
+        ctx.beginPath();
+        ctx.moveTo(b.x1, b.y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+      // leaves
+      for (let i = 0; i < leaves.length; i++) {
+        const lf = leaves[i];
+        if (t < lf.tStart) continue;
+        const local = Math.min(1, (t - lf.tStart) / 0.14);
+        const r = lf.maxR * easeOutCubic(local);
+        if (r <= 0.2) continue;
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = lf.color;
+        ctx.beginPath();
+        ctx.arc(lf.x, lf.y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    };
+
+    const reduce =
+      window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // Always paint a first frame synchronously so the canvas is never blank,
+    // even before the first animation frame fires.
+    render(0);
+
+    // If motion is reduced or the tab is hidden (rAF is paused), draw the
+    // finished tree immediately instead of relying on the animation loop.
+    if (reduce || document.hidden) {
+      render(1);
+      if (onDoneRef.current) onDoneRef.current();
+      return;
+    }
+
+    let raf;
+    let startTs = null;
+    let finished = false;
+    const loop = (ts) => {
+      if (startTs === null) startTs = ts;
+      const t = Math.min(1, (ts - startTs) / duration);
+      render(t);
+      if (t < 1) {
+        raf = requestAnimationFrame(loop);
+      } else if (!finished) {
+        finished = true;
+        if (onDoneRef.current) onDoneRef.current();
+      }
+    };
+    raf = requestAnimationFrame(loop);
+
+    // If the tab gets hidden mid-grow, jump to the finished tree so it isn't
+    // frozen half-grown when the user returns.
+    const onVisibility = () => {
+      if (document.hidden && !finished) {
+        finished = true;
+        if (raf) cancelAnimationFrame(raf);
+        render(1);
+        if (onDoneRef.current) onDoneRef.current();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [size.width, size.height, progress, dark, seed, replayKey, duration, transparent, fullscreen]);
+
+  return (
+    <div ref={ref} className="absolute inset-0 h-full w-full">
+      <canvas ref={canvasRef} className="block h-full w-full" />
+    </div>
+  );
+}
+
 function parsePercent(value) {
   if (!value) return 0;
   if (value.includes("-")) {
@@ -335,6 +754,9 @@ function App() {
   const [query, setQuery] = useState("");
   const [dark, setDark] = useState(false);
   const [savedMessage, setSavedMessage] = useState("");
+  const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
+  const [celebrate, setCelebrate] = useState(false);
+  const [celebrateKey, setCelebrateKey] = useState(0);
   const [studentStep, setStudentStep] = useState(0);
   const [showDetails, setShowDetails] = useState(false);
   const quote = useMemo(() => quotes[new Date().getDate() % quotes.length], []);
@@ -416,6 +838,8 @@ function App() {
   const badges = getBadges(form, streak);
   const isStudent = role === "student";
   const isFacilitator = role === "facilitator";
+  // Tree fullness reflects real progress: current score + logging streak.
+  const treeProgress = Math.max(0.12, Math.min(1, 0.6 * (score / 100) + 0.4 * (Math.min(streak, 10) / 10)));
 
   const login = (nextAuth) => {
     setAuth(nextAuth);
@@ -446,6 +870,7 @@ function App() {
   };
 
   const saveProgress = async () => {
+    setSaveState("saving");
     const entry = { ...form, id: `${form.studentName || "student"}-${form.date}`, lastUpdatedBy: role, savedAt: new Date().toISOString() };
     setEntries((current) => {
       const withoutCurrent = current.filter((item) => item.id !== entry.id);
@@ -458,11 +883,18 @@ function App() {
       } else {
         setSavedMessage(isFacilitator ? "Facilitator feedback saved to database." : "Student progress saved to database.");
       }
+      setSaveState("saved");
+      setCelebrateKey((value) => value + 1);
+      setCelebrate(true);
     } catch (error) {
       console.error("[persistence] Cloud save failed. Entry was kept in local browser backup.", error);
       setSavedMessage("Saved locally. Cloud database sync failed; check logs/config.");
+      setSaveState("error");
     }
-    setTimeout(() => setSavedMessage(""), 2200);
+    setTimeout(() => {
+      setSavedMessage("");
+      setSaveState("idle");
+    }, 2600);
   };
 
   const loadEntry = (entry) => {
@@ -491,7 +923,14 @@ function App() {
   return (
     <main className="min-h-screen bg-[#faf9f5] text-[#141413] transition-colors dark:bg-[#181715] dark:text-[#faf9f5]">
       <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-24 px-4 py-4 sm:px-6 lg:px-8">
-        <header className="print-full py-4">
+        <header className="print-full relative overflow-hidden py-4">
+          <div
+            className="no-print pointer-events-none absolute inset-x-0 bottom-0 top-32 z-0 hidden opacity-40 dark:opacity-30 md:block"
+            aria-hidden="true"
+          >
+            <GrowingTree progress={1} duration={14000} dark={dark} transparent seed={7} />
+          </div>
+          <div className="relative z-10">
           <nav className="no-print mb-16 flex h-16 items-center justify-between gap-4 border-b border-[#e6dfd8] bg-[#faf9f5] dark:border-white/10 dark:bg-[#181715]">
             <div className="flex items-center gap-3">
               <span className="text-xl leading-none text-[#cc785c]">✣</span>
@@ -567,6 +1006,7 @@ function App() {
               </div>
             </div>
           </div>
+          </div>
         </header>
 
         <section className="no-print sticky top-0 z-20 -mx-4 border-y border-[#e6dfd8] bg-[#faf9f5]/95 px-4 py-3 backdrop-blur dark:border-white/10 dark:bg-[#181715]/95 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
@@ -591,7 +1031,6 @@ function App() {
               </button>
             </div>
           </div>
-          {savedMessage && <p className="mx-auto mt-2 max-w-[1200px] text-sm font-medium text-[#cc785c]">{savedMessage}</p>}
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1fr_360px]">
@@ -606,6 +1045,7 @@ function App() {
                 showDetails={showDetails}
                 setShowDetails={setShowDetails}
                 saveProgress={saveProgress}
+                saveState={saveState}
               />
             ) : (
               <FacilitatorCompactFlow
@@ -620,6 +1060,7 @@ function App() {
                 weeklyScore={weeklyScore}
                 monthlyScore={monthlyScore}
                 saveProgress={saveProgress}
+                saveState={saveState}
               />
             )}
           </div>
@@ -627,23 +1068,55 @@ function App() {
           <aside className="grid content-start gap-6">
             <Card icon={BarChart3} title="9. Dashboard & Analytics" subtitle="Live summary from saved and current progress." dark>
               <div className="grid gap-4">
-                <ProgressTile label="Overall progress" value={score} large dark />
-                <ProgressTile label="Daily recorded progress" value={dailyScore} helper={`${filteredEntries.length ? latestEntry.date : "Today"}`} dark />
-                <ProgressTile label="Weekly average progress" value={weeklyScore} helper={`${weeklyEntries.length} day${weeklyEntries.length === 1 ? "" : "s"}`} dark />
-                <ProgressTile label="Monthly average progress" value={monthlyScore} helper={`${monthlyEntries.length} day${monthlyEntries.length === 1 ? "" : "s"}`} dark />
-                <ProgressTile label="Water intake" value={Math.round((waterToNumber(form.waterIntake) / 3) * 100)} helper={form.waterIntake} dark />
-                <ProgressTile label="English speaking" value={parsePercent(form.englishSpeaking)} dark />
-                <ProgressTile label="Theory completion" value={parsePercent(form.theoryCompletion)} dark />
-                <ProgressTile label="Practical completion" value={parsePercent(form.practicalCompletion)} dark />
-                <ProgressTile label="Emotional wellbeing" value={Number(form.emotionalRating) * 10} helper={`${form.emotionalRating}/10`} dark />
-                <ProgressTile label="AI confidence" value={Number(form.aiConfidence) * 10} helper={`${form.aiConfidence}/10`} dark />
+                <ProgressTile label="Overall progress" value={score} large dark index={0} />
+                <ProgressTile label="Daily recorded progress" value={dailyScore} helper={`${filteredEntries.length ? latestEntry.date : "Today"}`} dark index={1} />
+                <ProgressTile label="Weekly average progress" value={weeklyScore} helper={`${weeklyEntries.length} day${weeklyEntries.length === 1 ? "" : "s"}`} dark index={2} />
+                <ProgressTile label="Monthly average progress" value={monthlyScore} helper={`${monthlyEntries.length} day${monthlyEntries.length === 1 ? "" : "s"}`} dark index={3} />
+                <ProgressTile label="Water intake" value={Math.round((waterToNumber(form.waterIntake) / 3) * 100)} helper={form.waterIntake} dark index={4} />
+                <ProgressTile label="English speaking" value={parsePercent(form.englishSpeaking)} dark index={5} />
+                <ProgressTile label="Theory completion" value={parsePercent(form.theoryCompletion)} dark index={6} />
+                <ProgressTile label="Practical completion" value={parsePercent(form.practicalCompletion)} dark index={7} />
+                <ProgressTile label="Emotional wellbeing" value={Number(form.emotionalRating) * 10} helper={`${form.emotionalRating}/10`} dark index={8} />
+                <ProgressTile label="AI confidence" value={Number(form.aiConfidence) * 10} helper={`${form.aiConfidence}/10`} dark index={9} />
+              </div>
+            </Card>
+
+            <Card icon={Sparkles} title="Growth Garden" subtitle="Your tree grows as you log days and raise your scores.">
+              <div className="relative h-72 overflow-hidden rounded-xl border border-[#e6dfd8] dark:border-white/10">
+                <GrowingTree
+                  progress={treeProgress}
+                  duration={5500}
+                  dark={dark}
+                  seed={42}
+                  replayKey={Math.round(treeProgress * 10)}
+                />
+                <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between">
+                  <span className="rounded-full bg-[#141413]/70 px-3 py-1 text-xs font-medium tabular-nums text-white backdrop-blur">
+                    {Math.round(treeProgress * 100)}% grown
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#141413]/70 px-3 py-1 text-xs font-medium tabular-nums text-white backdrop-blur">
+                    <Flame size={13} className="text-[#e08968]" />
+                    {streak}d
+                  </span>
+                </div>
               </div>
             </Card>
 
             <Card icon={Award} title="Achievement Badges" subtitle="Friendly wins appear as habits grow.">
+              {streak > 0 && (
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-[#cc785c]/10 px-4 py-2 text-sm font-medium text-[#cc785c] dark:bg-[#cc785c]/15">
+                  <Flame size={18} className="animate-float" />
+                  <span className="tabular-nums">{streak}-day streak</span>
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
-                {badges.map((badge) => (
-                  <span key={badge} className="rounded-full bg-[#efe9de] px-3 py-2 text-[13px] font-medium text-[#141413] dark:bg-[#252320] dark:text-[#faf9f5]">
+                {badges.map((badge, i) => (
+                  <span
+                    key={badge}
+                    className="animate-scale-in inline-flex items-center gap-1.5 rounded-full bg-[#efe9de] px-3 py-2 text-[13px] font-medium text-[#141413] dark:bg-[#252320] dark:text-[#faf9f5]"
+                    style={{ animationDelay: `${i * 80}ms` }}
+                  >
+                    <Check size={14} className="text-[#5b8c5a]" />
                     {badge}
                   </span>
                 ))}
@@ -688,7 +1161,81 @@ function App() {
           </aside>
         </section>
       </div>
+      <Toast message={savedMessage} state={saveState} />
+      {celebrate && (
+        <CelebrationOverlay dark={dark} replayKey={celebrateKey} onClose={() => setCelebrate(false)} />
+      )}
     </main>
+  );
+}
+
+function CelebrationOverlay({ dark, replayKey, onClose }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const close = () => {
+    setShown(false);
+    setTimeout(onClose, 450);
+  };
+  return (
+    <div
+      className={`no-print fixed inset-0 z-[60] cursor-pointer transition-opacity duration-500 ${shown ? "opacity-100" : "opacity-0"}`}
+      onClick={close}
+      role="dialog"
+      aria-label="Progress celebration"
+    >
+      <GrowingTree
+        progress={1}
+        duration={9000}
+        dark={dark}
+        fullscreen
+        seed={replayKey + 3}
+        replayKey={replayKey}
+        onDone={() => setTimeout(close, 1600)}
+      />
+      <div className="pointer-events-none absolute inset-x-0 top-12 flex flex-col items-center gap-2 px-4 text-center">
+        <p className="font-display text-3xl font-normal tracking-[-0.02em] text-[#141413] dark:text-[#faf9f5] sm:text-4xl">
+          Your progress is growing
+        </p>
+        <p className="text-sm text-[#3d3d3a] dark:text-[#a09d96]">Saved — watch your tree grow.</p>
+      </div>
+      <button
+        onClick={(event) => {
+          event.stopPropagation();
+          close();
+        }}
+        className="absolute bottom-8 left-1/2 -translate-x-1/2 rounded-full bg-[#141413]/80 px-5 py-2 text-sm font-medium text-white backdrop-blur transition active:scale-95"
+      >
+        Tap anywhere to skip
+      </button>
+    </div>
+  );
+}
+
+function Toast({ message, state }) {
+  if (!message) return null;
+  const isError = state === "error";
+  return (
+    <div className="no-print pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
+      <div
+        className="animate-toast-in pointer-events-auto flex items-center gap-3 rounded-xl bg-[#181715] px-5 py-3 text-sm font-medium text-[#faf9f5] shadow-lift dark:bg-[#252320]"
+        role="status"
+      >
+        <span
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-full"
+          style={{ backgroundColor: isError ? "rgba(201,100,66,0.2)" : "rgba(91,140,90,0.2)" }}
+        >
+          {isError ? (
+            <Sparkles size={16} className="text-[#c96442]" />
+          ) : (
+            <CheckCircle size={16} className="text-[#5b8c5a]" />
+          )}
+        </span>
+        {message}
+      </div>
+    </div>
   );
 }
 
@@ -852,6 +1399,7 @@ function StudentQuickFlow({
   showDetails,
   setShowDetails,
   saveProgress,
+  saveState,
 }) {
   const steps = ["Today", "Learning", "Reflection"];
   const quickHabits = ["Brushed teeth", "Took bath", "Ate breakfast", "Slept properly", "Did exercise/stretching"];
@@ -945,9 +1493,7 @@ function StudentQuickFlow({
                 Next
               </button>
             ) : (
-              <button className="h-10 rounded-lg bg-[#cc785c] px-5 text-sm font-medium text-white" onClick={saveProgress}>
-                Save daily entry
-              </button>
+              <SaveButton onClick={saveProgress} state={saveState} label="Save daily entry" />
             )}
           </div>
         </div>
@@ -1006,6 +1552,7 @@ function FacilitatorCompactFlow({
   weeklyScore,
   monthlyScore,
   saveProgress,
+  saveState,
 }) {
   return (
     <>
@@ -1076,9 +1623,7 @@ function FacilitatorCompactFlow({
           </div>
         </DetailSection>
         <div className="mt-6 flex justify-end">
-          <button className="h-10 rounded-lg bg-[#cc785c] px-5 text-sm font-medium text-white" onClick={saveProgress}>
-            Save facilitator feedback
-          </button>
+          <SaveButton onClick={saveProgress} state={saveState} label="Save facilitator feedback" />
         </div>
       </Card>
     </>
@@ -1227,29 +1772,69 @@ function Checklist({ title, labels, checks, onToggle }) {
   );
 }
 
-function ProgressTile({ label, value, helper, large = false, dark = false }) {
+function RadialProgress({ value, size = 132, stroke = 12, track = "rgba(255,255,255,0.12)" }) {
+  const animated = useCountUp(value);
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (Math.max(0, Math.min(100, value)) / 100) * circumference;
+  const color = progressColor(value);
+  return (
+    <div className="relative inline-grid place-items-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={track} strokeWidth={stroke} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          style={{ transition: "stroke-dashoffset 1s cubic-bezier(0.2, 0.8, 0.2, 1)" }}
+        />
+      </svg>
+      <div className="absolute inset-0 grid place-items-center">
+        <span className="font-display text-4xl font-normal tracking-[-0.02em] tabular-nums" style={{ color }}>
+          {animated}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ProgressTile({ label, value, helper, large = false, dark = false, index = 0 }) {
   const cleanValue = Math.max(0, Math.min(100, Math.round(value || 0)));
   const shell = dark
-    ? "rounded-xl bg-[#252320] p-4"
-    : "rounded-xl bg-[#f5f0e8] p-4 dark:bg-[#1f1e1b]";
+    ? "animate-rise rounded-xl bg-[#252320] p-4"
+    : "animate-rise rounded-xl bg-[#f5f0e8] p-4 dark:bg-[#1f1e1b]";
   const labelClass = dark ? "text-sm font-medium text-[#faf9f5]" : "text-sm font-medium text-[#3d3d3a] dark:text-[#faf9f5]";
-  const valueClass = dark ? "font-mono text-sm text-[#cc785c]" : "font-mono text-sm text-[#cc785c]";
-  const largeClass = dark
-    ? "font-display mt-3 text-5xl font-normal tracking-[-0.02em] text-[#faf9f5]"
-    : "font-display mt-3 text-5xl font-normal tracking-[-0.02em] text-[#141413] dark:text-[#faf9f5]";
+  const valueClass = "font-mono text-sm tabular-nums";
+  const stagger = { animationDelay: `${index * 60}ms` };
+
+  if (large) {
+    return (
+      <div className={`${shell} flex flex-col items-center gap-3 text-center`} style={stagger}>
+        <p className={labelClass}>{label}</p>
+        <RadialProgress value={cleanValue} />
+        {helper && <p className="font-mono text-xs uppercase tracking-[1.5px] text-[#a09d96]">{helper}</p>}
+      </div>
+    );
+  }
+
   return (
-    <div className={`${shell} ${large ? "text-center" : ""}`}>
+    <div className={shell} style={stagger}>
       <div className="mb-2 flex items-center justify-between gap-3">
         <p className={labelClass}>{label}</p>
-        <p className={valueClass}>{helper || `${cleanValue}%`}</p>
+        <p className={valueClass} style={{ color: progressColor(cleanValue) }}>{helper || `${cleanValue}%`}</p>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-[#e6dfd8] dark:bg-white/15">
         <div
-          className="h-full rounded-full bg-[#cc785c] transition-all duration-500"
-          style={{ width: `${cleanValue}%` }}
+          className="h-full rounded-full transition-all duration-700 ease-out"
+          style={{ width: `${cleanValue}%`, backgroundColor: progressColor(cleanValue) }}
         />
       </div>
-      {large && <p className={largeClass}>{cleanValue}%</p>}
     </div>
   );
 }
@@ -1270,15 +1855,46 @@ function Metric({ label, value, tone }) {
 function ActionButton({ icon: Icon, label, onClick, primary = false }) {
   return (
     <button
-      className={`inline-flex h-10 items-center gap-2 rounded-lg px-5 text-sm font-medium transition ${
+      className={`inline-flex h-10 items-center gap-2 rounded-lg px-5 text-sm font-medium transition active:scale-95 ${
         primary
-          ? "bg-[#cc785c] text-white active:bg-[#a9583e]"
-          : "border border-[#e6dfd8] bg-[#faf9f5] text-[#141413] dark:border-white/10 dark:bg-[#252320] dark:text-[#faf9f5]"
+          ? "bg-[#cc785c] text-white hover:bg-[#a9583e] active:bg-[#a9583e]"
+          : "border border-[#e6dfd8] bg-[#faf9f5] text-[#141413] hover:border-[#cc785c]/40 dark:border-white/10 dark:bg-[#252320] dark:text-[#faf9f5]"
       }`}
       onClick={onClick}
     >
       <Icon size={18} />
       {label}
+    </button>
+  );
+}
+
+function SaveButton({ onClick, state = "idle", label = "Save" }) {
+  const saving = state === "saving";
+  const saved = state === "saved";
+  return (
+    <button
+      className={`inline-flex h-10 items-center gap-2 rounded-lg px-5 text-sm font-medium text-white transition active:scale-95 disabled:opacity-90 ${
+        saved ? "bg-[#5b8c5a]" : "bg-[#cc785c] hover:bg-[#a9583e]"
+      }`}
+      onClick={onClick}
+      disabled={saving}
+    >
+      {saving ? (
+        <>
+          <Loader size={16} className="animate-spin" />
+          Saving…
+        </>
+      ) : saved ? (
+        <>
+          <Check size={16} />
+          Saved
+        </>
+      ) : (
+        <>
+          <Save size={16} />
+          {label}
+        </>
+      )}
     </button>
   );
 }
@@ -1300,8 +1916,8 @@ function MiniChart({ title, entries, getValue, dark = false }) {
           return (
             <div key={entry?.id || index} className="flex flex-1 flex-col items-center gap-2">
               <div
-                className={`w-full rounded-t transition-all ${entry ? "bg-[#cc785c]" : "bg-[#e6dfd8] dark:bg-white/10"}`}
-                style={{ height: `${value}%` }}
+                className={`w-full rounded-md transition-all duration-700 ease-out ${entry ? "" : "bg-[#e6dfd8] dark:bg-white/10"}`}
+                style={{ height: `${value}%`, backgroundColor: entry ? progressColor(value) : undefined }}
                 title={entry ? `${entry.date}: ${Math.round(value)}%` : "No saved data"}
               />
               <span className="font-mono text-[10px] uppercase text-[#8e8b82]">{entry ? new Date(entry.date).toLocaleDateString("en", { weekday: "short" }) : "-"}</span>
