@@ -89,6 +89,13 @@ const Moon = (props) => (
     <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
   </Icon>
 );
+const LogOut = (props) => (
+  <Icon {...props}>
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <polyline points="16 17 21 12 16 7" />
+    <line x1="21" x2="9" y1="12" y2="12" />
+  </Icon>
+);
 const Save = (props) => (
   <Icon {...props}>
     <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
@@ -467,7 +474,7 @@ function useElementSize() {
 
 function GrowingTree({
   progress = 1,
-  duration = 12000,
+  duration = 6000,
   dark = false,
   transparent = false,
   seed = 1,
@@ -588,7 +595,7 @@ function GrowingTree({
     const loop = (ts) => {
       if (startTs === null) startTs = ts;
       const t = Math.min(1, (ts - startTs) / duration);
-      render(t);
+      render(easeOutCubic(t));
       if (t < 1) {
         raf = requestAnimationFrame(loop);
       } else if (!finished) {
@@ -1145,6 +1152,8 @@ function App() {
   const milestones = useMemo(() => getMilestones(filteredEntries, dashboardEntry, streak), [filteredEntries, dashboardEntry, streak]);
   // Tree fullness reflects real progress: current score + logging streak.
   const treeProgress = Math.max(0.12, Math.min(1, 0.6 * (score / 100) + 0.4 * (Math.min(streak, 10) / 10)));
+  const RoleIcon = isFacilitator ? Award : UserRound;
+  const roleBadgeLabel = isFacilitator ? "Facilitator" : "Student";
 
   const login = (nextAuth) => {
     setAuth(nextAuth);
@@ -1185,17 +1194,13 @@ function App() {
       const cloudSave = await upsertCloudEntry(entry, role);
       if (cloudSave.skipped) {
         setStorageMode("local");
-        setSavedMessage(
-          isFacilitator
-            ? "Feedback saved on this device only (cloud not connected)."
-            : "Saved on this device only (cloud not connected).",
-        );
+        setSavedMessage(isFacilitator ? "Feedback saved on this device." : "Saved on this device.");
       } else {
         setStorageMode("cloud");
         setSavedMessage(
           isFacilitator
-            ? `Feedback saved to the cloud for ${entry.studentName || "this student"}.`
-            : "Saved to the cloud — your facilitator can now see this.",
+            ? `Feedback saved for ${entry.studentName || "this student"}.`
+            : "Saved successfully. Your facilitator can now see this.",
         );
       }
       setSaveState("saved");
@@ -1204,7 +1209,7 @@ function App() {
     } catch (error) {
       console.error("[persistence] Cloud save failed. Entry was kept in local browser backup.", error);
       setStorageMode("error");
-      setSavedMessage("Saved on this device. Cloud sync failed — check your connection.");
+      setSavedMessage("Saved on this device. Shared database unavailable.");
       setSaveState("error");
     }
     setTimeout(() => {
@@ -1249,13 +1254,20 @@ function App() {
             className="no-print pointer-events-none absolute inset-x-0 bottom-0 top-32 z-0 hidden opacity-40 dark:opacity-30 md:block"
             aria-hidden="true"
           >
-            <GrowingTree progress={1} duration={14000} dark={dark} transparent seed={7} />
+            <GrowingTree progress={1} duration={6500} dark={dark} transparent seed={7} />
           </div>
           <div className="relative z-10">
-          <nav className="no-print mb-16 flex h-16 items-center justify-between gap-4 border-b border-[#e6dfd8] bg-[#faf9f5] dark:border-white/10 dark:bg-[#181715]">
-            <div className="flex items-center gap-3">
+          <nav className="no-print mb-16 flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-[#e6dfd8] bg-[#faf9f5] py-3 dark:border-white/10 dark:bg-[#181715]">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
               <span className="text-xl leading-none text-[#cc785c]">✣</span>
               <span className="text-sm font-medium text-[#141413] dark:text-[#faf9f5]">Student Progress</span>
+              <span className="inline-flex h-9 items-center gap-2 rounded-full bg-[#efe9de] px-3 text-sm font-medium capitalize text-[#141413] dark:bg-[#252320] dark:text-[#faf9f5]">
+                <RoleIcon size={16} className="text-[#cc785c]" />
+                <span>{roleBadgeLabel}</span>
+                <span className="hidden max-w-[12rem] truncate border-l border-[#e6dfd8] pl-2 text-[#6c6a64] dark:border-white/10 dark:text-[#a09d96] sm:inline">
+                  {auth.name}
+                </span>
+              </span>
             </div>
             <div className="hidden items-center gap-6 text-sm font-medium text-[#6c6a64] md:flex">
               <button className="transition hover:text-[#cc785c]" onClick={() => scrollToId("tracker")}>
@@ -1268,15 +1280,26 @@ function App() {
                 Reports
               </button>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="hidden rounded-full bg-[#efe9de] px-3 py-2 text-sm font-medium capitalize text-[#141413] dark:bg-[#252320] dark:text-[#faf9f5] md:inline-flex">
-                {auth.name} • {role}
-              </span>
-              <button className="hidden text-sm font-medium text-[#141413] dark:text-[#faf9f5] sm:inline-flex" onClick={resetToday}>
-                New day
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                aria-label="Start a new day"
+                title="New day"
+                className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e6dfd8] bg-[#faf9f5] px-3 text-sm font-medium text-[#141413] transition active:scale-[0.98] dark:border-white/10 dark:bg-[#252320] dark:text-[#faf9f5] sm:px-4"
+                onClick={resetToday}
+              >
+                <CalendarDays size={18} />
+                <span className="hidden sm:inline">New day</span>
               </button>
-              <button className="text-sm font-medium text-[#141413] dark:text-[#faf9f5]" onClick={logout}>
-                Logout
+              <IconButton icon={dark ? Sun : Moon} label={dark ? "Switch to light mode" : "Switch to dark mode"} onClick={() => setDark((value) => !value)} />
+              <button
+                type="button"
+                aria-label="Logout"
+                className="inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-medium text-[#141413] transition active:scale-[0.98] dark:text-[#faf9f5] sm:px-4"
+                onClick={logout}
+              >
+                <LogOut size={18} />
+                <span className="hidden sm:inline">Logout</span>
               </button>
             </div>
           </nav>
@@ -1295,11 +1318,6 @@ function App() {
                   ? "Review daily progress, add facilitator feedback, and see every student's daily, weekly, and monthly progress."
                   : "A simple daily system for self-care, English confidence, AI practice, theory, practicals, and reflection."}
               </p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <button className="rounded-lg border border-[#e6dfd8] bg-[#faf9f5] px-5 py-3 text-sm font-medium text-[#141413] dark:border-white/10 dark:bg-[#252320] dark:text-[#faf9f5]" onClick={exportPdf}>
-                  Export report
-                </button>
-              </div>
             </div>
 
             <div className="rounded-2xl bg-[#181715] p-4 text-[#faf9f5]">
@@ -1348,15 +1366,7 @@ function App() {
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <StorageBadge mode={storageMode} />
-              <ActionButton icon={Download} label="Export PDF" onClick={exportPdf} />
-              <ActionButton icon={dark ? Sun : Moon} label={dark ? "Light" : "Dark"} onClick={() => setDark((value) => !value)} />
-              <button
-                className="h-10 rounded-lg border border-[#e6dfd8] bg-[#faf9f5] px-5 text-sm font-medium text-[#141413] dark:border-white/10 dark:bg-[#252320] dark:text-[#faf9f5]"
-                onClick={resetToday}
-              >
-                New day
-              </button>
+              <ActionButton icon={Download} label="Export Report" onClick={exportPdf} />
             </div>
           </div>
         </section>
@@ -1413,7 +1423,7 @@ function App() {
               <div className="relative h-72 overflow-hidden rounded-xl border border-[#e6dfd8] dark:border-white/10">
                 <GrowingTree
                   progress={treeProgress}
-                  duration={5500}
+                  duration={2800}
                   dark={dark}
                   seed={42}
                   replayKey={Math.round(treeProgress * 10)}
@@ -1545,12 +1555,12 @@ function CelebrationOverlay({ dark, replayKey, onClose }) {
     >
       <GrowingTree
         progress={1}
-        duration={9000}
+        duration={4200}
         dark={dark}
         fullscreen
         seed={replayKey + 3}
         replayKey={replayKey}
-        onDone={() => setTimeout(close, 1600)}
+        onDone={() => setTimeout(close, 1200)}
       />
       <div className="pointer-events-none absolute inset-x-0 top-12 flex flex-col items-center gap-2 px-4 text-center">
         <p className="font-display text-3xl font-normal tracking-[-0.02em] text-[#141413] dark:text-[#faf9f5] sm:text-4xl">
@@ -1568,24 +1578,6 @@ function CelebrationOverlay({ dark, replayKey, onClose }) {
         Tap anywhere to skip
       </button>
     </div>
-  );
-}
-
-function StorageBadge({ mode }) {
-  const map = {
-    cloud: { text: "Cloud synced", color: "#5b8c5a", dot: "#5b8c5a", title: "Saved to the shared cloud database — facilitators can see student entries." },
-    local: { text: "On this device", color: "#8e8b82", dot: "#d9a441", title: "Saved only in this browser. Cloud database is not connected." },
-    error: { text: "Cloud error", color: "#c96442", dot: "#c96442", title: "Could not reach the cloud database. Entries are kept on this device for now." },
-  };
-  const m = map[mode] || map.local;
-  return (
-    <span
-      className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e6dfd8] bg-[#faf9f5] px-3 text-sm font-medium dark:border-white/10 dark:bg-[#252320]"
-      title={m.title}
-    >
-      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: m.dot }} />
-      <span style={{ color: m.color }}>{m.text}</span>
-    </span>
   );
 }
 
@@ -2333,7 +2325,8 @@ function Metric({ label, value, tone }) {
 function ActionButton({ icon: Icon, label, onClick, primary = false }) {
   return (
     <button
-      className={`inline-flex h-10 items-center gap-2 rounded-lg px-5 text-sm font-medium transition active:scale-95 ${
+      type="button"
+      className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-lg px-5 text-sm font-medium transition active:scale-95 ${
         primary
           ? "bg-[#cc785c] text-white hover:bg-[#a9583e] active:bg-[#a9583e]"
           : "border border-[#e6dfd8] bg-[#faf9f5] text-[#141413] hover:border-[#cc785c]/40 dark:border-white/10 dark:bg-[#252320] dark:text-[#faf9f5]"
@@ -2342,6 +2335,20 @@ function ActionButton({ icon: Icon, label, onClick, primary = false }) {
     >
       <Icon size={18} />
       {label}
+    </button>
+  );
+}
+
+function IconButton({ icon: Icon, label, onClick }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      className="inline-grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-[#e6dfd8] bg-[#faf9f5] text-[#141413] transition active:scale-95 dark:border-white/10 dark:bg-[#252320] dark:text-[#faf9f5]"
+      onClick={onClick}
+    >
+      <Icon size={18} />
     </button>
   );
 }

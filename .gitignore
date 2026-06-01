@@ -9,3 +9,4 @@ backups/
 *.gpg
 backup.log
 restore.log
+.claude/
