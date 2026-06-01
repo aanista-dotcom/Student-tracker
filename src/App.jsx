@@ -382,6 +382,12 @@ function mixHex(a, b, t) {
 }
 
 const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+// Slight overshoot so leaves "pop" in — feels more rewarding.
+const easeOutBack = (t) => {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+};
 
 // Palette-aligned tree colors (warm-brown wood -> brand coral tips, accent greens, gold).
 function treePalette(dark) {
@@ -562,8 +568,8 @@ function GrowingTree({
       for (let i = 0; i < leaves.length; i++) {
         const lf = leaves[i];
         if (t < lf.tStart) continue;
-        const local = Math.min(1, (t - lf.tStart) / 0.14);
-        const r = lf.maxR * easeOutCubic(local);
+        const local = Math.min(1, (t - lf.tStart) / 0.18);
+        const r = lf.maxR * easeOutBack(local);
         if (r <= 0.2) continue;
         ctx.globalAlpha = 0.85;
         ctx.fillStyle = lf.color;
@@ -1248,13 +1254,13 @@ function App() {
 
   return (
     <main className="min-h-screen bg-[#faf9f5] text-[#141413] transition-colors dark:bg-[#181715] dark:text-[#faf9f5]">
-      <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-24 px-4 py-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-24 px-4 py-4 sm:px-6 lg:px-8">
         <header className="print-full relative overflow-hidden py-4">
           <div
             className="no-print pointer-events-none absolute inset-x-0 bottom-0 top-32 z-0 hidden opacity-40 dark:opacity-30 md:block"
             aria-hidden="true"
           >
-            <GrowingTree progress={1} duration={6500} dark={dark} transparent seed={7} />
+            <GrowingTree progress={1} duration={4500} dark={dark} transparent seed={7} />
           </div>
           <div className="relative z-10">
           <nav className="no-print mb-16 flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-[#e6dfd8] bg-[#faf9f5] py-3 dark:border-white/10 dark:bg-[#181715]">
@@ -1355,7 +1361,7 @@ function App() {
         </header>
 
         <section className="no-print sticky top-0 z-20 -mx-4 border-y border-[#e6dfd8] bg-[#faf9f5]/95 px-4 py-3 backdrop-blur dark:border-white/10 dark:bg-[#181715]/95 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-          <div className="mx-auto flex max-w-[1200px] flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="mx-auto flex max-w-[1400px] flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="relative w-full md:max-w-md">
               <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#8e8b82]" size={18} />
               <input
@@ -1371,7 +1377,7 @@ function App() {
           </div>
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[1fr_360px]">
+        <section className="grid gap-6 lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_minmax(380px,420px)]">
           <div id="tracker" className="grid gap-6 scroll-mt-24">
             {isStudent ? (
               <StudentQuickFlow
@@ -1405,17 +1411,19 @@ function App() {
 
           <aside className="grid content-start gap-6">
             <Card icon={BarChart3} title="Dashboard & Analytics" subtitle="Live summary from saved and current progress." dark>
-              <div className="grid gap-4">
+              <div className="grid gap-3">
                 <ProgressTile label="Overall progress" value={score} large dark index={0} />
-                <ProgressTile label="Daily recorded progress" value={dailyScore} helper={`${filteredEntries.length ? latestEntry.date : "Today"}`} dark index={1} />
-                <ProgressTile label="Weekly average progress" value={weeklyScore} helper={`${weeklyEntries.length} day${weeklyEntries.length === 1 ? "" : "s"}`} dark index={2} />
-                <ProgressTile label="Monthly average progress" value={monthlyScore} helper={`${monthlyEntries.length} day${monthlyEntries.length === 1 ? "" : "s"}`} dark index={3} />
-                <ProgressTile label="Water intake" value={Math.round((waterToNumber(form.waterIntake) / 3) * 100)} helper={form.waterIntake} dark index={4} />
-                <ProgressTile label="English speaking" value={parsePercent(form.englishSpeaking)} dark index={5} />
-                <ProgressTile label="Theory completion" value={parsePercent(form.theoryCompletion)} dark index={6} />
-                <ProgressTile label="Practical completion" value={parsePercent(form.practicalCompletion)} dark index={7} />
-                <ProgressTile label="Emotional wellbeing" value={Number(form.emotionalRating) * 10} helper={`${form.emotionalRating}/10`} dark index={8} />
-                <ProgressTile label="AI confidence" value={Number(form.aiConfidence) * 10} helper={`${form.aiConfidence}/10`} dark index={9} />
+                <div className="grid grid-cols-2 gap-3">
+                  <ProgressTile label="Daily recorded" value={dailyScore} helper={`${filteredEntries.length ? latestEntry.date : "Today"}`} dark index={1} />
+                  <ProgressTile label="Weekly average" value={weeklyScore} helper={`${weeklyEntries.length} day${weeklyEntries.length === 1 ? "" : "s"}`} dark index={2} />
+                  <ProgressTile label="Monthly average" value={monthlyScore} helper={`${monthlyEntries.length} day${monthlyEntries.length === 1 ? "" : "s"}`} dark index={3} />
+                  <ProgressTile label="Water intake" value={Math.round((waterToNumber(form.waterIntake) / 3) * 100)} helper={form.waterIntake} dark index={4} />
+                  <ProgressTile label="English speaking" value={parsePercent(form.englishSpeaking)} dark index={5} />
+                  <ProgressTile label="Theory completion" value={parsePercent(form.theoryCompletion)} dark index={6} />
+                  <ProgressTile label="Practical completion" value={parsePercent(form.practicalCompletion)} dark index={7} />
+                  <ProgressTile label="Emotional wellbeing" value={Number(form.emotionalRating) * 10} helper={`${form.emotionalRating}/10`} dark index={8} />
+                  <ProgressTile label="AI confidence" value={Number(form.aiConfidence) * 10} helper={`${form.aiConfidence}/10`} dark index={9} />
+                </div>
               </div>
             </Card>
 
@@ -1423,7 +1431,7 @@ function App() {
               <div className="relative h-72 overflow-hidden rounded-xl border border-[#e6dfd8] dark:border-white/10">
                 <GrowingTree
                   progress={treeProgress}
-                  duration={2800}
+                  duration={2400}
                   dark={dark}
                   seed={42}
                   replayKey={Math.round(treeProgress * 10)}
@@ -1555,7 +1563,7 @@ function CelebrationOverlay({ dark, replayKey, onClose }) {
     >
       <GrowingTree
         progress={1}
-        duration={4200}
+        duration={3600}
         dark={dark}
         fullscreen
         seed={replayKey + 3}
@@ -1608,8 +1616,8 @@ function Toast({ message, state }) {
 
 function Card({ icon: Icon, title, subtitle, children, dark = false, id }) {
   const shell = dark
-    ? "print-full animate-rise scroll-mt-24 rounded-xl bg-[#181715] p-6 text-[#faf9f5] sm:p-8"
-    : "print-full animate-rise scroll-mt-24 rounded-xl bg-[#efe9de] p-6 dark:bg-[#252320] sm:p-8";
+    ? "print-full animate-rise card-lift scroll-mt-24 rounded-xl bg-[#181715] p-6 text-[#faf9f5] sm:p-8"
+    : "print-full animate-rise card-lift scroll-mt-24 rounded-xl bg-[#efe9de] p-6 dark:bg-[#252320] sm:p-8";
   const iconShell = dark
     ? "grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#252320] text-[#cc785c]"
     : "grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#faf9f5] text-[#cc785c] dark:bg-[#181715] dark:text-[#cc785c]";
@@ -2561,7 +2569,7 @@ function FilterSelect({ label, value, options, onChange }) {
 function CategoryScoreGrid({ entry, entries }) {
   const scores = getCategoryScores(entry);
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {categoryMeta.map((category) => {
         const value = scores[category.key] || 0;
         const trend = trendForEntries(entries, category.key);
