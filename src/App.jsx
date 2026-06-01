@@ -298,6 +298,10 @@ const emptyForm = {
   communication: "",
   improvementAreas: "",
   additionalComments: "",
+  weeklyFeedback: "",
+  monthlyFeedback: "",
+  strengthHighlights: "",
+  suggestedImprovements: "",
   studentSelfRating: 6,
   facilitatorRating: 6,
   dailyStatus: "Good",
@@ -620,11 +624,12 @@ function GrowingTree({
 
 function parsePercent(value) {
   if (!value) return 0;
-  if (value.includes("-")) {
-    const numbers = value.match(/\d+/g)?.map(Number) || [0];
+  const text = String(value);
+  if (text.includes("-")) {
+    const numbers = text.match(/\d+/g)?.map(Number) || [0];
     return Math.round(numbers.reduce((sum, number) => sum + number, 0) / numbers.length);
   }
-  return Number(value.replace("%", "")) || 0;
+  return Number(text.replace("%", "")) || 0;
 }
 
 function waterToNumber(value) {
@@ -675,6 +680,272 @@ function normalizeEntry(entry) {
 function averageScore(entries) {
   if (!entries.length) return 0;
   return Math.round(entries.reduce((sum, entry) => sum + getScore(entry), 0) / entries.length);
+}
+
+const categoryMeta = [
+  { key: "practicals", label: "Practicals", shortLabel: "Practical", color: "#c96442" },
+  { key: "english", label: "English", shortLabel: "English", color: "#5d8db8" },
+  { key: "theory", label: "Theory", shortLabel: "Theory", color: "#d9a441" },
+  { key: "wellness", label: "Wellness / Self-Care", shortLabel: "Wellness", color: "#5b8c5a" },
+];
+
+const categoryOptions = ["Overall", ...categoryMeta.map((category) => category.label)];
+
+function clampScore(value) {
+  return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+}
+
+function averageScores(values) {
+  const clean = values
+    .filter((value) => value !== null && value !== undefined && value !== "")
+    .map(Number)
+    .filter(Number.isFinite)
+    .map(clampScore);
+  if (!clean.length) return 0;
+  return clampScore(clean.reduce((sum, value) => sum + value, 0) / clean.length);
+}
+
+function checklistPercent(entry, labels) {
+  if (!labels.length) return 0;
+  return clampScore((labels.filter((label) => entry.checks?.[label]).length / labels.length) * 100);
+}
+
+function averageCookingScore(entry) {
+  const ratings = Object.values(entry.facilitatorCooking || {}).map(Number).filter(Number.isFinite);
+  if (!ratings.length) return null;
+  return clampScore((ratings.reduce((sum, value) => sum + value, 0) / ratings.length) * 10);
+}
+
+function getCategoryScores(entry = emptyForm) {
+  const safeEntry = normalizeEntry({ ...emptyForm, ...entry });
+  const selfCareLabels = Object.values(selfCareChecks).flat();
+  const newWordsScore = safeEntry.newWordsCount === "" ? null : Math.min(100, Number(safeEntry.newWordsCount) * 10);
+  return {
+    practicals: averageScores([
+      parsePercent(safeEntry.practicalCompletion),
+      Number(safeEntry.practicalConfidence) * 10,
+      checklistPercent(safeEntry, practicalChecks),
+      averageCookingScore(safeEntry),
+    ]),
+    english: averageScores([
+      parsePercent(safeEntry.englishSpeaking),
+      Number(safeEntry.englishConfidence) * 10,
+      checklistPercent(safeEntry, englishChecks),
+      newWordsScore,
+    ]),
+    theory: averageScores([
+      parsePercent(safeEntry.theoryCompletion),
+      Number(safeEntry.theoryUnderstanding) * 10,
+      checklistPercent(safeEntry, theoryChecks),
+    ]),
+    wellness: averageScores([
+      checklistPercent(safeEntry, selfCareLabels),
+      Number(safeEntry.emotionalRating) * 10,
+      clampScore((waterToNumber(safeEntry.waterIntake) / 3) * 100),
+      safeEntry.attendance === "Present" ? 100 : 0,
+    ]),
+  };
+}
+
+function getOverallProgress(entry) {
+  return averageScores(Object.values(getCategoryScores(entry)));
+}
+
+function getCompletionStatus(value) {
+  const score = clampScore(value);
+  if (score >= 85) return "Completed";
+  if (score >= 70) return "On track";
+  if (score >= 50) return "In progress";
+  return "Needs support";
+}
+
+function getCategoryKeyFromLabel(label) {
+  if (label === "Overall") return "overall";
+  return categoryMeta.find((category) => category.label === label)?.key || "overall";
+}
+
+function getCategoryValue(entry, categoryKey = "overall") {
+  if (categoryKey === "overall") return getOverallProgress(entry);
+  return getCategoryScores(entry)[categoryKey] || 0;
+}
+
+function sortByDateAsc(entries) {
+  return [...entries].sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+}
+
+function sortByDateDesc(entries) {
+  return [...entries].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+}
+
+function trendFromValues(values) {
+  const clean = values.map(Number).filter(Number.isFinite);
+  if (clean.length < 2) return { delta: 0, label: "No trend yet", tone: "#8e8b82" };
+  const delta = Math.round(clean[clean.length - 1] - clean[0]);
+  if (delta > 0) return { delta, label: `+${delta}% growth`, tone: "#5b8c5a" };
+  if (delta < 0) return { delta, label: `${delta}% dip`, tone: "#c96442" };
+  return { delta: 0, label: "Stable", tone: "#d9a441" };
+}
+
+function trendForEntries(entries, categoryKey = "overall") {
+  return trendFromValues(sortByDateAsc(entries).map((entry) => getCategoryValue(entry, categoryKey)));
+}
+
+function chartSeries(entries, categoryKey = "overall", fallbackEntry = null) {
+  const source = entries.length ? sortByDateAsc(entries) : fallbackEntry ? [fallbackEntry] : [];
+  return source.map((entry) => ({
+    id: entry.id || `${entry.studentName || "student"}-${entry.date}`,
+    label: entry.date ? new Date(entry.date).toLocaleDateString("en", { month: "short", day: "numeric" }) : "Today",
+    value: getCategoryValue(entry, categoryKey),
+    entry,
+  }));
+}
+
+function getCompletedTasks(entry) {
+  const checkedTasks = Object.entries(entry.checks || {})
+    .filter(([, checked]) => checked)
+    .map(([label]) => label);
+  const learningTasks = [];
+  if (parsePercent(entry.practicalCompletion) >= 75) learningTasks.push(`Practical: ${entry.practicalName || "work completed"}`);
+  if (parsePercent(entry.theoryCompletion) >= 75) learningTasks.push(`Theory: ${entry.theoryTopic || "topic completed"}`);
+  if (parsePercent(entry.englishSpeaking) >= 60) learningTasks.push("English speaking practice");
+  if (entry.practicalLearned) learningTasks.push(`Learned: ${entry.practicalLearned}`);
+  return [...learningTasks, ...checkedTasks].slice(0, 10);
+}
+
+function uniqueNonEmpty(values, limit = 8) {
+  const seen = new Set();
+  return values
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .filter((value) => {
+      const key = value.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, limit);
+}
+
+function getSkillsLearned(entries) {
+  return uniqueNonEmpty(
+    entries.flatMap((entry) => [
+      entry.practicalLearned,
+      entry.practicalName,
+      entry.theoryTopic,
+      entry.theorySubtopic,
+      entry.newWords,
+      entry.aiLearned,
+    ]),
+    10,
+  );
+}
+
+function hasFeedback(entry) {
+  return [
+    entry.practicalDoneWell,
+    entry.practicalNeedsImprovement,
+    entry.improvementAreas,
+    entry.additionalComments,
+    entry.weeklyFeedback,
+    entry.monthlyFeedback,
+    entry.strengthHighlights,
+    entry.suggestedImprovements,
+    entry.participation,
+    entry.discipline,
+    entry.communication,
+  ].some((value) => String(value || "").trim()) || Number(entry.facilitatorRating) !== Number(emptyForm.facilitatorRating);
+}
+
+function getFeedbackEntries(entries) {
+  return sortByDateDesc(entries.filter(hasFeedback));
+}
+
+function monthKey(dateString) {
+  if (!dateString) return "Unknown";
+  return dateString.slice(0, 7);
+}
+
+function monthLabel(key) {
+  if (key === "Unknown") return "Unknown";
+  const date = new Date(`${key}-01T00:00:00`);
+  return date.toLocaleDateString("en", { month: "short", year: "2-digit" });
+}
+
+function getMonthlySummaries(entries) {
+  const groups = new Map();
+  entries.forEach((entry) => {
+    const key = monthKey(entry.date);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(entry);
+  });
+  return [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-6)
+    .map(([key, group]) => {
+      const categoryAverages = Object.fromEntries(
+        categoryMeta.map((category) => [
+          category.key,
+          averageScores(group.map((entry) => getCategoryScores(entry)[category.key])),
+        ]),
+      );
+      return {
+        id: key,
+        label: monthLabel(key),
+        entries: group,
+        overall: averageScores(group.map(getOverallProgress)),
+        performance: averageScore(group),
+        attendance: clampScore((group.filter((entry) => entry.attendance === "Present").length / Math.max(1, group.length)) * 100),
+        categories: categoryAverages,
+      };
+    });
+}
+
+function getStudentSummaries(entries) {
+  const groups = new Map();
+  entries.forEach((entry) => {
+    const name = entry.studentName || "Unnamed student";
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name).push(entry);
+  });
+  return [...groups.entries()]
+    .map(([name, group]) => {
+      const sorted = sortByDateDesc(group);
+      const categories = Object.fromEntries(
+        categoryMeta.map((category) => [
+          category.key,
+          averageScores(group.map((entry) => getCategoryScores(entry)[category.key])),
+        ]),
+      );
+      return {
+        name,
+        batch: sorted[0]?.schoolName || "No batch",
+        latest: sorted[0],
+        records: group.length,
+        overall: averageScores(group.map(getOverallProgress)),
+        performance: averageScore(group),
+        attendance: clampScore((group.filter((entry) => entry.attendance === "Present").length / Math.max(1, group.length)) * 100),
+        categories,
+      };
+    })
+    .sort((a, b) => b.overall - a.overall);
+}
+
+function getMilestones(entries, currentEntry, streak) {
+  const currentScores = getCategoryScores(currentEntry);
+  const completed = [];
+  const upcoming = [];
+  if (entries.length > 0) completed.push({ title: "First progress entry", detail: `${entries.length} saved record${entries.length === 1 ? "" : "s"}` });
+  if (streak >= 3) completed.push({ title: "3 day streak", detail: `${streak} days in a row` });
+  if (streak < 3) upcoming.push({ title: "Build a 3 day streak", detail: `${Math.max(0, 3 - streak)} more day${3 - streak === 1 ? "" : "s"}` });
+  categoryMeta.forEach((category) => {
+    const value = currentScores[category.key] || 0;
+    if (value >= 80) {
+      completed.push({ title: `${category.shortLabel} milestone`, detail: `${value}% - ${getCompletionStatus(value)}`, color: category.color });
+    } else {
+      upcoming.push({ title: `${category.shortLabel} goal`, detail: `${Math.max(0, 80 - value)}% to reach 80%`, color: category.color });
+    }
+  });
+  return { completed: completed.slice(0, 6), upcoming: upcoming.slice(0, 6) };
 }
 
 function daysAgo(count) {
@@ -760,6 +1031,10 @@ function App() {
   const [celebrateKey, setCelebrateKey] = useState(0);
   const [studentStep, setStudentStep] = useState(0);
   const [showDetails, setShowDetails] = useState(false);
+  const [reportView, setReportView] = useState("daily");
+  const [batchFilter, setBatchFilter] = useState("All batches");
+  const [studentFilter, setStudentFilter] = useState("All students");
+  const [categoryFilter, setCategoryFilter] = useState("Overall");
   const quote = useMemo(() => quotes[new Date().getDate() % quotes.length], []);
   const role = auth?.role || "student";
 
@@ -820,19 +1095,40 @@ function App() {
     }));
   }, [auth]);
 
-  const filteredEntries = useMemo(() => {
-    const lowered = query.trim().toLowerCase();
-    const visibleEntries =
+  const baseEntries = useMemo(
+    () =>
       role === "facilitator" || !auth?.name
         ? entries
-        : entries.filter((entry) => entry.studentName?.toLowerCase() === auth.name.trim().toLowerCase());
+        : entries.filter((entry) => entry.studentName?.toLowerCase() === auth.name.trim().toLowerCase()),
+    [entries, role, auth?.name],
+  );
+
+  const batchOptions = useMemo(
+    () => ["All batches", ...uniqueNonEmpty(baseEntries.map((entry) => entry.schoolName || "No batch"), 24)],
+    [baseEntries],
+  );
+
+  const studentOptions = useMemo(
+    () => ["All students", ...uniqueNonEmpty(baseEntries.map((entry) => entry.studentName || "Unnamed student"), 80)],
+    [baseEntries],
+  );
+
+  const filteredEntries = useMemo(() => {
+    const lowered = query.trim().toLowerCase();
+    let visibleEntries = baseEntries;
+    if (role === "facilitator" && batchFilter !== "All batches") {
+      visibleEntries = visibleEntries.filter((entry) => (entry.schoolName || "No batch") === batchFilter);
+    }
+    if (role === "facilitator" && studentFilter !== "All students") {
+      visibleEntries = visibleEntries.filter((entry) => (entry.studentName || "Unnamed student") === studentFilter);
+    }
     if (!lowered) return visibleEntries;
     return visibleEntries.filter((entry) =>
-      [entry.studentName, entry.facilitatorName, entry.schoolName, entry.date].some((value) =>
+      [entry.studentName, entry.facilitatorName, entry.schoolName, entry.date, entry.theoryTopic, entry.practicalName].some((value) =>
         String(value || "").toLowerCase().includes(lowered),
       ),
     );
-  }, [entries, query, role, auth?.name]);
+  }, [baseEntries, query, role, batchFilter, studentFilter]);
 
   const latestEntry = filteredEntries[0] || form;
   const weeklyEntries = filteredEntries.filter((entry) => new Date(entry.date) >= daysAgo(6)).slice(0, 7).reverse();
@@ -845,6 +1141,8 @@ function App() {
   const badges = getBadges(form, streak);
   const isStudent = role === "student";
   const isFacilitator = role === "facilitator";
+  const dashboardEntry = filteredEntries.length ? latestEntry : form;
+  const milestones = useMemo(() => getMilestones(filteredEntries, dashboardEntry, streak), [filteredEntries, dashboardEntry, streak]);
   // Tree fullness reflects real progress: current score + logging streak.
   const treeProgress = Math.max(0.12, Math.min(1, 0.6 * (score / 100) + 0.4 * (Math.min(streak, 10) / 10)));
 
@@ -1096,7 +1394,7 @@ function App() {
           </div>
 
           <aside className="grid content-start gap-6">
-            <Card id="analytics" icon={BarChart3} title="Dashboard & Analytics" subtitle="Live summary from saved and current progress." dark>
+            <Card icon={BarChart3} title="Dashboard & Analytics" subtitle="Live summary from saved and current progress." dark>
               <div className="grid gap-4">
                 <ProgressTile label="Overall progress" value={score} large dark index={0} />
                 <ProgressTile label="Daily recorded progress" value={dailyScore} helper={`${filteredEntries.length ? latestEntry.date : "Today"}`} dark index={1} />
@@ -1189,6 +1487,35 @@ function App() {
               </div>
             </Card>
           </aside>
+        </section>
+
+        <section id="analytics" className="grid gap-6 scroll-mt-24">
+          <VisualReportsDashboard
+            isFacilitator={isFacilitator}
+            reportView={reportView}
+            setReportView={setReportView}
+            batchOptions={batchOptions}
+            studentOptions={studentOptions}
+            batchFilter={batchFilter}
+            setBatchFilter={setBatchFilter}
+            studentFilter={studentFilter}
+            setStudentFilter={setStudentFilter}
+            categoryFilter={categoryFilter}
+            setCategoryFilter={setCategoryFilter}
+            entries={filteredEntries.length ? filteredEntries : [form]}
+            weeklyEntries={weeklyEntries.length ? weeklyEntries : [form]}
+            monthlyEntries={monthlyEntries.length ? monthlyEntries : [form]}
+            currentEntry={dashboardEntry}
+          />
+          <MilestoneBoard milestones={milestones} />
+          <FeedbackHistoryPanel entries={filteredEntries} isFacilitator={isFacilitator} />
+          {isFacilitator && (
+            <FacilitatorComparisonPanel
+              entries={filteredEntries}
+              categoryFilter={categoryFilter}
+              loadEntry={loadEntry}
+            />
+          )}
         </section>
       </div>
       <Toast message={savedMessage} state={saveState} />
@@ -1370,7 +1697,7 @@ function LoginScreen({ onLogin }) {
 
           <div className="grid gap-4">
             <Field label={loginRole === "student" ? "Student Name" : "Facilitator Name"} value={name} onChange={setName} placeholder="Enter your name" />
-            <Field label="School Name" value={schoolName} onChange={setSchoolName} placeholder="Enter school name" />
+            <Field label="School / Batch Name" value={schoolName} onChange={setSchoolName} placeholder="Enter school or batch" />
           </div>
 
           {error && <p className="mt-4 text-sm font-medium text-[#c64545]">{error}</p>}
@@ -1474,7 +1801,7 @@ function StudentQuickFlow({
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Student Name" value={form.studentName} onChange={(value) => update("studentName", value)} disabled />
               <Field label="Date" type="date" value={form.date} onChange={(value) => update("date", value)} />
-              <Field label="School Name" value={form.schoolName} onChange={(value) => update("schoolName", value)} placeholder="School name" />
+              <Field label="School / Batch Name" value={form.schoolName} onChange={(value) => update("schoolName", value)} placeholder="School or batch" />
               <Select label="Attendance" value={form.attendance} options={attendance} onChange={(value) => update("attendance", value)} />
               <Select label="Mood" value={form.mood} options={moods} onChange={(value) => update("mood", value)} />
               <Select label="Water" value={form.waterIntake} options={waterOptions} onChange={(value) => update("waterIntake", value)} />
@@ -1631,15 +1958,8 @@ function StudentSubmissionView({ form }) {
     );
   }
   const overall = getScore(form);
-  const sections = [
-    { label: "Self-care & wellbeing", value: sectionCompletion(form, Object.values(selfCareChecks).flat()) },
-    { label: "English practice", value: sectionCompletion(form, englishChecks) },
-    { label: "AI tools", value: sectionCompletion(form, aiChecks) },
-    { label: "Theory", value: sectionCompletion(form, theoryChecks) },
-    { label: "Practical", value: sectionCompletion(form, practicalChecks) },
-    { label: "Life skills", value: sectionCompletion(form, lifeSkillChecks) },
-    { label: "Campus discipline", value: sectionCompletion(form, campusChecks) },
-  ];
+  const categoryScores = getCategoryScores(form);
+  const sections = categoryMeta.map((category) => ({ label: category.label, value: categoryScores[category.key] }));
   return (
     <Card
       icon={UserRound}
@@ -1713,7 +2033,7 @@ function FacilitatorCompactFlow({
           <Field label="Student Name" value={form.studentName} onChange={(value) => update("studentName", value)} placeholder="Enter student name" />
           <Field label="Date" type="date" value={form.date} onChange={(value) => update("date", value)} />
           <Field label="Facilitator Name" value={form.facilitatorName} onChange={(value) => update("facilitatorName", value)} disabled />
-          <Field label="School Name" value={form.schoolName} onChange={(value) => update("schoolName", value)} placeholder="School name" />
+          <Field label="School / Batch Name" value={form.schoolName} onChange={(value) => update("schoolName", value)} placeholder="School or batch" />
           <Select label="Attendance" value={form.attendance} options={attendance} onChange={(value) => update("attendance", value)} />
           <Select label="Mood" value={form.mood} options={moods} onChange={(value) => update("mood", value)} />
         </div>
@@ -1754,6 +2074,10 @@ function FacilitatorCompactFlow({
         <div className="grid gap-4 md:grid-cols-2">
           <Select label="Daily status" value={form.dailyStatus} options={statusOptions} onChange={(value) => update("dailyStatus", value)} />
           <Slider label="Facilitator rating" value={form.facilitatorRating} onChange={(value) => update("facilitatorRating", value)} />
+          <Textarea label="Weekly feedback" value={form.weeklyFeedback} onChange={(value) => update("weeklyFeedback", value)} />
+          <Textarea label="Monthly feedback" value={form.monthlyFeedback} onChange={(value) => update("monthlyFeedback", value)} />
+          <Textarea label="Strengths highlighted" value={form.strengthHighlights} onChange={(value) => update("strengthHighlights", value)} />
+          <Textarea label="Suggested improvements" value={form.suggestedImprovements} onChange={(value) => update("suggestedImprovements", value)} />
           <Textarea label="What was done well?" value={form.practicalDoneWell} onChange={(value) => update("practicalDoneWell", value)} />
           <Textarea label="What needs improvement?" value={form.practicalNeedsImprovement} onChange={(value) => update("practicalNeedsImprovement", value)} />
           <Textarea label="Support needed / next step" value={form.improvementAreas} onChange={(value) => update("improvementAreas", value)} />
@@ -2001,7 +2325,7 @@ function Metric({ label, value, tone }) {
   return (
     <div className={`rounded-lg p-3 ${classes}`}>
       <p className="text-xs font-medium uppercase tracking-[1.5px]">{label}</p>
-      <p className="font-display mt-1 text-3xl font-normal tracking-[-0.02em]">{value}</p>
+      <p className="font-display mt-1 break-words text-2xl font-normal leading-tight sm:text-3xl">{value}</p>
     </div>
   );
 }
@@ -2109,6 +2433,525 @@ function AttendanceDots({ entries, dark = false }) {
         ))}
       </div>
     </div>
+  );
+}
+
+function TrendPill({ trend }) {
+  return (
+    <span
+      className="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium"
+      style={{ backgroundColor: `${trend.tone}22`, color: trend.tone }}
+    >
+      {trend.label}
+    </span>
+  );
+}
+
+function LineChart({ title, series, color = "#c96442", helper }) {
+  const data = series.length ? series : [{ label: "No data", value: 0 }];
+  const width = 640;
+  const height = 220;
+  const padX = 34;
+  const padY = 28;
+  const values = data.map((point) => clampScore(point.value));
+  const max = Math.max(100, ...values);
+  const xStep = data.length > 1 ? (width - padX * 2) / (data.length - 1) : 0;
+  const points = data.map((point, index) => {
+    const x = data.length > 1 ? padX + index * xStep : width / 2;
+    const y = height - padY - (clampScore(point.value) / max) * (height - padY * 2);
+    return { ...point, x, y, value: clampScore(point.value) };
+  });
+  const pointString = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const areaString =
+    points.length > 1
+      ? `${points[0].x},${height - padY} ${pointString} ${points[points.length - 1].x},${height - padY}`
+      : "";
+
+  return (
+    <div className="rounded-xl bg-[#f5f0e8] p-4 dark:bg-[#1f1e1b]">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium text-[#141413] dark:text-[#faf9f5]">{title}</p>
+        {helper && <p className="text-xs font-medium uppercase tracking-[1.5px] text-[#8e8b82]">{helper}</p>}
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-56 w-full overflow-visible" role="img" aria-label={title}>
+        {[0, 25, 50, 75, 100].map((tick) => {
+          const y = height - padY - (tick / max) * (height - padY * 2);
+          return (
+            <g key={tick}>
+              <line x1={padX} x2={width - padX} y1={y} y2={y} stroke="currentColor" className="text-[#e6dfd8] dark:text-white/10" />
+              <text x={8} y={y + 4} fontSize="11" fill="#8e8b82">
+                {tick}
+              </text>
+            </g>
+          );
+        })}
+        {areaString && <polygon points={areaString} fill={color} opacity="0.1" />}
+        {points.length > 1 && <polyline points={pointString} fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />}
+        {points.map((point, index) => (
+          <g key={`${point.label}-${index}`}>
+            <circle cx={point.x} cy={point.y} r="6" fill="#faf9f5" stroke={color} strokeWidth="3" />
+            <text x={point.x} y={height - 6} textAnchor="middle" fontSize="11" fill="#8e8b82">
+              {point.label}
+            </text>
+            <title>{`${point.label}: ${point.value}%`}</title>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+function BarChart({ title, bars, helper }) {
+  const data = bars.length ? bars : [{ label: "No data", value: 0, color: "#8e8b82" }];
+  return (
+    <div className="rounded-xl bg-[#f5f0e8] p-4 dark:bg-[#1f1e1b]">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium text-[#141413] dark:text-[#faf9f5]">{title}</p>
+        {helper && <p className="text-xs font-medium uppercase tracking-[1.5px] text-[#8e8b82]">{helper}</p>}
+      </div>
+      <div className="grid gap-3">
+        {data.map((bar) => {
+          const value = clampScore(bar.value);
+          return (
+            <div key={bar.label}>
+              <div className="mb-1 flex items-center justify-between gap-3 text-xs font-medium">
+                <span className="text-[#3d3d3a] dark:text-[#faf9f5]">{bar.label}</span>
+                <span className="font-mono tabular-nums" style={{ color: bar.color || progressColor(value) }}>
+                  {value}%
+                </span>
+              </div>
+              <div className="h-3 overflow-hidden rounded-full bg-[#e6dfd8] dark:bg-white/10">
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{ width: `${value}%`, backgroundColor: bar.color || progressColor(value) }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function FilterSelect({ label, value, options, onChange }) {
+  return (
+    <label className="grid gap-2">
+      <span className="text-xs font-medium uppercase tracking-[1.5px] text-[#8e8b82]">{label}</span>
+      <select
+        className="h-10 rounded-lg border border-[#e6dfd8] bg-[#faf9f5] px-3 text-sm text-[#141413] outline-none transition focus:border-[#cc785c] focus:ring-4 focus:ring-[#cc785c]/15 dark:border-white/10 dark:bg-[#181715] dark:text-[#faf9f5]"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {options.map((option) => (
+          <option key={option}>{option}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function CategoryScoreGrid({ entry, entries }) {
+  const scores = getCategoryScores(entry);
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {categoryMeta.map((category) => {
+        const value = scores[category.key] || 0;
+        const trend = trendForEntries(entries, category.key);
+        return (
+          <div key={category.key} className="rounded-xl bg-[#f5f0e8] p-4 dark:bg-[#1f1e1b]">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-[#141413] dark:text-[#faf9f5]">{category.label}</p>
+                <p className="mt-1 text-xs text-[#8e8b82]">{getCompletionStatus(value)}</p>
+              </div>
+              <TrendPill trend={trend} />
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <RadialProgress value={value} size={96} stroke={10} track="rgba(142,139,130,0.18)" />
+              <div className="min-w-0 flex-1">
+                <div className="h-2 overflow-hidden rounded-full bg-[#e6dfd8] dark:bg-white/10">
+                  <div className="h-full rounded-full" style={{ width: `${value}%`, backgroundColor: category.color }} />
+                </div>
+                <p className="mt-3 text-xs leading-5 text-[#6c6a64] dark:text-[#a09d96]">
+                  Status is based on completion, confidence, ratings, and related checklist work.
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ReportTabs({ value, onChange }) {
+  const views = [
+    { key: "daily", label: "Daily" },
+    { key: "weekly", label: "Weekly" },
+    { key: "monthly", label: "Monthly" },
+  ];
+  return (
+    <div className="grid gap-2 rounded-xl bg-[#f5f0e8] p-2 dark:bg-[#1f1e1b] sm:grid-cols-3">
+      {views.map((view) => (
+        <button
+          key={view.key}
+          className={`h-10 rounded-lg text-sm font-medium transition ${
+            value === view.key ? "bg-[#cc785c] text-white" : "text-[#6c6a64] hover:text-[#141413] dark:text-[#a09d96] dark:hover:text-[#faf9f5]"
+          }`}
+          onClick={() => onChange(view.key)}
+        >
+          {view.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function DailyReport({ currentEntry, entries, focusedCategoryKey, focusedCategoryLabel }) {
+  const categoryBars = categoryMeta.map((category) => ({
+    label: category.shortLabel,
+    value: getCategoryScores(currentEntry)[category.key],
+    color: category.color,
+  }));
+  const tasks = getCompletedTasks(currentEntry);
+  const notes = uniqueNonEmpty([
+    currentEntry.proudToday,
+    currentEntry.practicalLearned,
+    currentEntry.challengeFaced,
+    currentEntry.improveTomorrow,
+    currentEntry.askedForHelp,
+  ], 5);
+  return (
+    <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <LineChart
+        title={`${focusedCategoryLabel} daily trend`}
+        series={chartSeries(entries.slice(0, 7), focusedCategoryKey, currentEntry)}
+        color={focusedCategoryKey === "overall" ? "#cc785c" : categoryMeta.find((category) => category.key === focusedCategoryKey)?.color}
+        helper="recent records"
+      />
+      <div className="grid gap-4">
+        <BarChart title="Category score today" bars={categoryBars} helper={currentEntry.date || "Today"} />
+        <div className="rounded-xl bg-[#f5f0e8] p-4 dark:bg-[#1f1e1b]">
+          <div className="mb-3 grid gap-2 sm:grid-cols-3">
+            <Metric label="Score" value={`${getScore(currentEntry)}%`} tone="coral" />
+            <Metric label="Attendance" value={currentEntry.attendance || "-"} tone="ink" />
+            <Metric label="Status" value={currentEntry.dailyStatus || "-"} tone="ink" />
+          </div>
+          <p className="mb-2 text-sm font-medium text-[#141413] dark:text-[#faf9f5]">Tasks completed today</p>
+          <div className="flex flex-wrap gap-2">
+            {(tasks.length ? tasks : ["No completed tasks recorded yet"]).map((task) => (
+              <span key={task} className="rounded-full bg-[#faf9f5] px-3 py-1.5 text-xs font-medium text-[#3d3d3a] dark:bg-[#252320] dark:text-[#faf9f5]">
+                {task}
+              </span>
+            ))}
+          </div>
+          <p className="mb-2 mt-4 text-sm font-medium text-[#141413] dark:text-[#faf9f5]">Daily reflections</p>
+          <div className="grid gap-2">
+            {(notes.length ? notes : ["No reflections saved for this day yet"]).map((note) => (
+              <p key={note} className="rounded-lg bg-[#faf9f5] p-3 text-sm leading-6 text-[#6c6a64] dark:bg-[#252320] dark:text-[#a09d96]">
+                {note}
+              </p>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WeeklyReport({ entries, focusedCategoryKey, focusedCategoryLabel }) {
+  const source = entries.length ? entries : [];
+  const categoryBars = categoryMeta.map((category) => ({
+    label: category.shortLabel,
+    value: averageScores(source.map((entry) => getCategoryScores(entry)[category.key])),
+    color: category.color,
+  }));
+  const attendanceRate = clampScore((source.filter((entry) => entry.attendance === "Present").length / Math.max(1, source.length)) * 100);
+  const skills = getSkillsLearned(source);
+  const improvements = uniqueNonEmpty(source.map((entry) => entry.improvementAreas || entry.practicalNeedsImprovement || entry.challengeFaced), 6);
+  const feedback = uniqueNonEmpty(source.map((entry) => entry.weeklyFeedback || entry.additionalComments || entry.practicalDoneWell), 5);
+  return (
+    <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <LineChart
+        title={`${focusedCategoryLabel} weekly growth`}
+        series={chartSeries(source, focusedCategoryKey)}
+        color={focusedCategoryKey === "overall" ? "#cc785c" : categoryMeta.find((category) => category.key === focusedCategoryKey)?.color}
+        helper={`${source.length} record${source.length === 1 ? "" : "s"}`}
+      />
+      <div className="grid gap-4">
+        <BarChart title="Weekly category averages" bars={categoryBars} helper="category split" />
+        <div className="rounded-xl bg-[#f5f0e8] p-4 dark:bg-[#1f1e1b]">
+          <div className="mb-4 grid gap-3 sm:grid-cols-2">
+            <ProgressTile label="Weekly attendance" value={attendanceRate} helper={`${source.filter((entry) => entry.attendance === "Present").length}/${source.length || 0} present`} />
+            <ProgressTile label="Weekly performance" value={averageScore(source)} helper={getCompletionStatus(averageScore(source))} />
+          </div>
+          <p className="mb-2 text-sm font-medium text-[#141413] dark:text-[#faf9f5]">Skills learned</p>
+          <div className="mb-4 flex flex-wrap gap-2">
+            {(skills.length ? skills : ["No skills recorded this week"]).map((skill) => (
+              <span key={skill} className="rounded-full bg-[#faf9f5] px-3 py-1.5 text-xs font-medium text-[#3d3d3a] dark:bg-[#252320] dark:text-[#faf9f5]">
+                {skill}
+              </span>
+            ))}
+          </div>
+          <p className="mb-2 text-sm font-medium text-[#141413] dark:text-[#faf9f5]">Weekly feedback</p>
+          <div className="grid gap-2">
+            {(feedback.length ? feedback : ["No facilitator feedback recorded this week"]).map((item) => (
+              <p key={item} className="rounded-lg bg-[#faf9f5] p-3 text-sm leading-6 text-[#6c6a64] dark:bg-[#252320] dark:text-[#a09d96]">
+                {item}
+              </p>
+            ))}
+          </div>
+          <p className="mb-2 mt-4 text-sm font-medium text-[#141413] dark:text-[#faf9f5]">Areas of improvement</p>
+          <div className="flex flex-wrap gap-2">
+            {(improvements.length ? improvements : ["No improvement areas recorded"]).map((item) => (
+              <span key={item} className="rounded-full bg-[#cc785c]/10 px-3 py-1.5 text-xs font-medium text-[#a9583e] dark:text-[#e08968]">
+                {item}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MonthlyReport({ entries, focusedCategoryKey, focusedCategoryLabel }) {
+  const summaries = getMonthlySummaries(entries);
+  const latest = summaries[summaries.length - 1];
+  const monthlyBars = summaries.map((summary) => ({
+    label: summary.label,
+    value: focusedCategoryKey === "overall" ? summary.overall : summary.categories[focusedCategoryKey],
+    color: focusedCategoryKey === "overall" ? "#cc785c" : categoryMeta.find((category) => category.key === focusedCategoryKey)?.color,
+  }));
+  const masteryBars = categoryMeta.map((category) => ({
+    label: category.shortLabel,
+    value: latest?.categories?.[category.key] || 0,
+    color: category.color,
+  }));
+  const achievements = uniqueNonEmpty(entries.map((entry) => entry.proudToday || entry.practicalDoneWell || entry.strengthHighlights), 5);
+  const skills = getSkillsLearned(entries);
+  const growthTrend = trendFromValues(summaries.map((summary) => (focusedCategoryKey === "overall" ? summary.overall : summary.categories[focusedCategoryKey])));
+  return (
+    <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="grid gap-4">
+        <BarChart title={`${focusedCategoryLabel} month-wise comparison`} bars={monthlyBars} helper="last 6 months" />
+        <LineChart
+          title="Overall performance trend"
+          series={summaries.map((summary) => ({ id: summary.id, label: summary.label, value: summary.performance }))}
+          color="#5d8db8"
+          helper="performance score"
+        />
+      </div>
+      <div className="grid gap-4">
+        <BarChart title="Skill mastery report" bars={masteryBars} helper={latest?.label || "No month"} />
+        <div className="rounded-xl bg-[#f5f0e8] p-4 dark:bg-[#1f1e1b]">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <p className="text-sm font-medium text-[#141413] dark:text-[#faf9f5]">Overall growth summary</p>
+            <TrendPill trend={growthTrend} />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <ProgressTile label="Monthly progress" value={latest?.overall || 0} helper={getCompletionStatus(latest?.overall || 0)} />
+            <ProgressTile label="Monthly attendance" value={latest?.attendance || 0} />
+            <ProgressTile label="Performance score" value={latest?.performance || 0} />
+          </div>
+          <p className="mb-2 mt-4 text-sm font-medium text-[#141413] dark:text-[#faf9f5]">Achievement highlights</p>
+          <div className="grid gap-2">
+            {(achievements.length ? achievements : ["No achievement highlights recorded this month"]).map((item) => (
+              <p key={item} className="rounded-lg bg-[#faf9f5] p-3 text-sm leading-6 text-[#6c6a64] dark:bg-[#252320] dark:text-[#a09d96]">
+                {item}
+              </p>
+            ))}
+          </div>
+          <p className="mb-2 mt-4 text-sm font-medium text-[#141413] dark:text-[#faf9f5]">Skills practiced</p>
+          <div className="flex flex-wrap gap-2">
+            {(skills.length ? skills : ["No skills recorded yet"]).map((skill) => (
+              <span key={skill} className="rounded-full bg-[#faf9f5] px-3 py-1.5 text-xs font-medium text-[#3d3d3a] dark:bg-[#252320] dark:text-[#faf9f5]">
+                {skill}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VisualReportsDashboard({
+  isFacilitator,
+  reportView,
+  setReportView,
+  batchOptions,
+  studentOptions,
+  batchFilter,
+  setBatchFilter,
+  studentFilter,
+  setStudentFilter,
+  categoryFilter,
+  setCategoryFilter,
+  entries,
+  weeklyEntries,
+  monthlyEntries,
+  currentEntry,
+}) {
+  const focusedCategoryKey = getCategoryKeyFromLabel(categoryFilter);
+  const focusedCategoryLabel = categoryFilter;
+  const reportEntries = reportView === "daily" ? entries : reportView === "weekly" ? weeklyEntries : monthlyEntries;
+  const overallProgress = getOverallProgress(currentEntry);
+  const performanceScore = getScore(currentEntry);
+  return (
+    <Card icon={BarChart3} title="Visual Progress Reports" subtitle="Daily, weekly, and monthly analytics with category trends and completion status.">
+      <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+        <div className="grid gap-4">
+          <ReportTabs value={reportView} onChange={setReportView} />
+          <div className="grid gap-3 rounded-xl bg-[#f5f0e8] p-4 dark:bg-[#1f1e1b] md:grid-cols-3">
+            {isFacilitator && <FilterSelect label="Batch" value={batchFilter} options={batchOptions} onChange={setBatchFilter} />}
+            {isFacilitator && <FilterSelect label="Student" value={studentFilter} options={studentOptions} onChange={setStudentFilter} />}
+            <FilterSelect label="Category" value={categoryFilter} options={categoryOptions} onChange={setCategoryFilter} />
+          </div>
+        </div>
+        <div className="grid gap-3 rounded-xl bg-[#181715] p-4 text-[#faf9f5] sm:grid-cols-3 lg:grid-cols-1">
+          <Metric label="Overall progress" value={`${overallProgress}%`} tone="coral" />
+          <Metric label="Performance score" value={`${performanceScore}%`} tone="ink" />
+          <Metric label="Completion status" value={getCompletionStatus(overallProgress)} tone="ink" />
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <CategoryScoreGrid entry={currentEntry} entries={entries} />
+      </div>
+
+      <div className="mt-5">
+        {reportView === "daily" && (
+          <DailyReport currentEntry={currentEntry} entries={entries} focusedCategoryKey={focusedCategoryKey} focusedCategoryLabel={focusedCategoryLabel} />
+        )}
+        {reportView === "weekly" && (
+          <WeeklyReport entries={reportEntries} focusedCategoryKey={focusedCategoryKey} focusedCategoryLabel={focusedCategoryLabel} />
+        )}
+        {reportView === "monthly" && (
+          <MonthlyReport entries={reportEntries} focusedCategoryKey={focusedCategoryKey} focusedCategoryLabel={focusedCategoryLabel} />
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function MilestoneBoard({ milestones }) {
+  return (
+    <Card icon={Award} title="Milestones & Achievements" subtitle="Completed wins and upcoming goals from the latest progress data.">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-xl bg-[#f5f0e8] p-4 dark:bg-[#1f1e1b]">
+          <p className="mb-3 text-sm font-medium text-[#141413] dark:text-[#faf9f5]">Completed milestones</p>
+          <div className="grid gap-3">
+            {(milestones.completed.length ? milestones.completed : [{ title: "Start tracking", detail: "Save the first progress entry" }]).map((item) => (
+              <div key={item.title} className="flex items-center gap-3 rounded-lg bg-[#faf9f5] p-3 dark:bg-[#252320]">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full" style={{ backgroundColor: `${item.color || "#5b8c5a"}22`, color: item.color || "#5b8c5a" }}>
+                  <Check size={17} />
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-[#141413] dark:text-[#faf9f5]">{item.title}</p>
+                  <p className="text-xs text-[#6c6a64] dark:text-[#a09d96]">{item.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-xl bg-[#f5f0e8] p-4 dark:bg-[#1f1e1b]">
+          <p className="mb-3 text-sm font-medium text-[#141413] dark:text-[#faf9f5]">Upcoming milestones</p>
+          <div className="grid gap-3">
+            {milestones.upcoming.map((item) => (
+              <div key={item.title} className="rounded-lg bg-[#faf9f5] p-3 dark:bg-[#252320]">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium text-[#141413] dark:text-[#faf9f5]">{item.title}</p>
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color || "#d9a441" }} />
+                </div>
+                <p className="text-xs text-[#6c6a64] dark:text-[#a09d96]">{item.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function FeedbackHistoryPanel({ entries, isFacilitator }) {
+  const feedback = getFeedbackEntries(entries);
+  return (
+    <Card
+      icon={HeartHandshake}
+      title="Feedback History"
+      subtitle={isFacilitator ? "Weekly, monthly, and daily feedback separated from progress reports." : "Facilitator feedback saved for your progress records."}
+    >
+      <div className="grid gap-4 lg:grid-cols-2">
+        {(feedback.length ? feedback : []).map((entry) => (
+          <article key={entry.id || `${entry.studentName}-${entry.date}`} className="rounded-xl bg-[#f5f0e8] p-4 dark:bg-[#1f1e1b]">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <p className="font-medium text-[#141413] dark:text-[#faf9f5]">{entry.studentName || "Unnamed student"}</p>
+                <p className="text-sm text-[#6c6a64] dark:text-[#a09d96]">{entry.date} - {entry.facilitatorName || "Facilitator"}</p>
+              </div>
+              <span className="rounded-full bg-[#cc785c] px-3 py-1 text-sm font-medium text-white">{entry.facilitatorRating}/10</span>
+            </div>
+            <div className="grid gap-2">
+              <ReadField label="Weekly feedback" value={entry.weeklyFeedback} />
+              <ReadField label="Monthly feedback" value={entry.monthlyFeedback} />
+              <ReadField label="Strengths" value={entry.strengthHighlights || entry.practicalDoneWell} />
+              <ReadField label="Suggested improvements" value={entry.suggestedImprovements || entry.practicalNeedsImprovement || entry.improvementAreas} />
+              <ReadField label="Additional comments" value={entry.additionalComments} />
+            </div>
+          </article>
+        ))}
+        {!feedback.length && (
+          <div className="rounded-xl bg-[#f5f0e8] p-4 text-sm leading-6 text-[#6c6a64] dark:bg-[#1f1e1b] dark:text-[#a09d96]">
+            No facilitator feedback has been saved yet.
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function FacilitatorComparisonPanel({ entries, categoryFilter, loadEntry }) {
+  const focusedCategoryKey = getCategoryKeyFromLabel(categoryFilter);
+  const summaries = getStudentSummaries(entries);
+  const bars = summaries.slice(0, 8).map((student) => ({
+    label: student.name,
+    value: focusedCategoryKey === "overall" ? student.overall : student.categories[focusedCategoryKey],
+    color: focusedCategoryKey === "overall" ? "#cc785c" : categoryMeta.find((category) => category.key === focusedCategoryKey)?.color,
+  }));
+  return (
+    <Card icon={UserRound} title="Facilitator Student Comparison" subtitle="Compare students by selected category, attendance, and latest milestone progress.">
+      <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <BarChart title={`${categoryFilter} comparison`} bars={bars} helper={`${summaries.length} student${summaries.length === 1 ? "" : "s"}`} />
+        <div className="grid gap-3">
+          {summaries.slice(0, 6).map((student) => (
+            <button
+              key={student.name}
+              className="rounded-xl bg-[#f5f0e8] p-4 text-left transition hover:shadow-lift dark:bg-[#1f1e1b]"
+              onClick={() => student.latest && loadEntry(student.latest)}
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium text-[#141413] dark:text-[#faf9f5]">{student.name}</p>
+                  <p className="text-sm text-[#6c6a64] dark:text-[#a09d96]">{student.batch} - {student.records} records</p>
+                </div>
+                <span className="rounded-full bg-[#181715] px-3 py-1 text-sm font-medium text-[#faf9f5]">{student.overall}%</span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <SectionBar label="Performance" value={student.performance} />
+                <SectionBar label="Attendance" value={student.attendance} />
+              </div>
+            </button>
+          ))}
+          {!summaries.length && (
+            <p className="rounded-xl bg-[#f5f0e8] p-4 text-sm text-[#6c6a64] dark:bg-[#1f1e1b] dark:text-[#a09d96]">
+              No student records match the current filters.
+            </p>
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }
 
