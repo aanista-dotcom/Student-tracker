@@ -114,7 +114,10 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Pinned to Babel 7: its preset-react defaults to the classic JSX runtime (React.createElement).
+         Babel 8 / "latest" defaults to the automatic runtime, which injects an `import` from
+         "react/jsx-runtime" that a non-module <script> can't execute, blanking the page. -->
+    <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
     <script src="./config.js"></script>
     <style>
       :root {

@@ -49,32 +49,41 @@ create trigger set_student_progress_updated_at
 before update on public.student_progress_entries
 for each row execute function public.set_updated_at();
 
--- Beginner-friendly MVP policy.
--- This lets the current static app write through the public anon key.
--- For private student data, replace this with Supabase Auth + authenticated-only policies.
+-- Google sign-in (Supabase Auth) is required. Only authenticated users (your
+-- navgurukul.org accounts) may read or write. This replaces the earlier open
+-- "anon" policies that allowed anyone with the link to read/write.
 alter table public.student_progress_entries enable row level security;
 
+-- Remove the old open-to-anyone policies if they still exist.
 drop policy if exists "mvp_anon_can_read_progress" on public.student_progress_entries;
-create policy "mvp_anon_can_read_progress"
+drop policy if exists "mvp_anon_can_insert_progress" on public.student_progress_entries;
+drop policy if exists "mvp_anon_can_update_progress" on public.student_progress_entries;
+
+drop policy if exists "authed_can_read" on public.student_progress_entries;
+create policy "authed_can_read"
 on public.student_progress_entries
 for select
-to anon
+to authenticated
 using (true);
 
-drop policy if exists "mvp_anon_can_insert_progress" on public.student_progress_entries;
-create policy "mvp_anon_can_insert_progress"
+drop policy if exists "authed_can_insert" on public.student_progress_entries;
+create policy "authed_can_insert"
 on public.student_progress_entries
 for insert
-to anon
+to authenticated
 with check (true);
 
-drop policy if exists "mvp_anon_can_update_progress" on public.student_progress_entries;
-create policy "mvp_anon_can_update_progress"
+drop policy if exists "authed_can_update" on public.student_progress_entries;
+create policy "authed_can_update"
 on public.student_progress_entries
 for update
-to anon
+to authenticated
 using (true)
 with check (true);
+
+-- NOTE: This makes data "org-members-only". To lock each student to ONLY their own
+-- rows, add a user_id column referencing auth.users and key these policies to
+-- auth.uid(). See docs/GOOGLE_LOGIN_SETUP.md (follow-up section).
 
 -- backup_runs is admin-only. Do not expose this table through the browser.
 alter table public.backup_runs enable row level security;

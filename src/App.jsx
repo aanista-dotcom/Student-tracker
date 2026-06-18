@@ -978,6 +978,46 @@ function getAppConfig() {
   return window.APP_CONFIG || {};
 }
 
+// Only accounts on this email domain may sign in (default: navgurukul.org).
+function getAllowedDomain() {
+  return String(getAppConfig().allowedEmailDomain || "navgurukul.org").trim().toLowerCase();
+}
+
+function isAllowedEmail(email) {
+  const lower = String(email || "").trim().toLowerCase();
+  return lower.endsWith("@" + getAllowedDomain());
+}
+
+// Role rule (confirmed with the team):
+//   - Students have a number in the part before "@" (their join year), e.g. aanistamalik22@navgurukul.org
+//   - Facilitators have no number, e.g. aanista@navgurukul.org
+// Optional facilitatorEmails / studentEmails lists in config.js override this for rare exceptions.
+function detectRoleFromEmail(email) {
+  const lower = String(email || "").trim().toLowerCase();
+  const config = getAppConfig();
+  const facilitators = (config.facilitatorEmails || []).map((item) => String(item).toLowerCase());
+  const students = (config.studentEmails || []).map((item) => String(item).toLowerCase());
+  if (facilitators.includes(lower)) return "facilitator";
+  if (students.includes(lower)) return "student";
+  const localPart = lower.split("@")[0] || "";
+  return /\d/.test(localPart) ? "student" : "facilitator";
+}
+
+// Build the app's existing auth shape from a signed-in Supabase/Google user.
+function authFromSupabaseUser(user) {
+  if (!user) return null;
+  const email = user.email || "";
+  const meta = user.user_metadata || {};
+  return {
+    id: user.id,
+    email,
+    role: detectRoleFromEmail(email),
+    name: meta.full_name || meta.name || email.split("@")[0] || "User",
+    schoolName: "",
+    loggedInAt: new Date().toISOString(),
+  };
+}
+
 function getSupabaseClient() {
   const config = getAppConfig();
   if (config.persistenceMode !== "supabase" || !config.supabaseUrl || !config.supabaseAnonKey || !window.supabase) {
@@ -993,14 +1033,14 @@ function getSupabaseTable() {
   return getAppConfig().supabaseTable || "student_progress_entries";
 }
 
-function toDatabaseRow(entry, role) {
+function toDatabaseRow(entry, updatedBy) {
   return {
     id: entry.id,
     student_name: entry.studentName || "",
     facilitator_name: entry.facilitatorName || "",
     school_name: entry.schoolName || "",
     entry_date: entry.date || today(),
-    last_updated_by: role || entry.lastUpdatedBy || "unknown",
+    last_updated_by: updatedBy || entry.lastUpdatedBy || "unknown",
     payload: entry,
     updated_at: new Date().toISOString(),
   };
@@ -1017,24 +1057,81 @@ async function loadCloudEntries() {
   return (data || []).map((row) => normalizeEntry({ ...row.payload, id: row.id }));
 }
 
-async function upsertCloudEntry(entry, role) {
+async function upsertCloudEntry(entry, updatedBy) {
   const client = getSupabaseClient();
   if (!client) return { skipped: true };
-  const { error } = await client.from(getSupabaseTable()).upsert(toDatabaseRow(entry, role), { onConflict: "id" });
+  const { error } = await client.from(getSupabaseTable()).upsert(toDatabaseRow(entry, updatedBy), { onConflict: "id" });
   if (error) throw error;
   return { skipped: false };
+}
+
+async function loadReports() {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  const { data, error } = await client
+    .from("daily_reports")
+    .select("*")
+    .order("report_date", { ascending: false })
+    .limit(500);
+  if (error) throw error;
+  return data || [];
+}
+
+// Build the display-ready report payload the daily-report Edge Function consumes.
+// Reuses the existing scoring helpers so we never duplicate that logic server-side.
+function buildReportPayload(entry, role) {
+  const e = normalizeEntry({ ...emptyForm, ...entry });
+  const selfCareLabels = Object.values(selfCareChecks).flat();
+  const aiToolsChecked = aiChecks.filter((label) => e.checks?.[label]);
+  return {
+    mode: role === "facilitator" ? "facilitator" : "student",
+    entryId: e.id || `${e.studentName || "student"}-${e.date}`,
+    studentName: e.studentName || "",
+    studentEmail: e.studentEmail || "",
+    schoolName: e.schoolName || "",
+    date: e.date,
+    attendance: e.attendance,
+    overallScore: getScore(e),
+    categoryScores: getCategoryScores(e),
+    selfCare: { percent: checklistPercent(e, selfCareLabels), mood: e.mood, water: e.waterIntake, emotionalRating: e.emotionalRating },
+    english: { speaking: e.englishSpeaking, level: e.englishLevel, confidence: e.englishConfidence, newWords: e.newWords },
+    theory: { topic: e.theoryTopic, completion: e.theoryCompletion, understanding: e.theoryUnderstanding },
+    practical: { name: e.practicalName, completion: e.practicalCompletion, confidence: e.practicalConfidence },
+    aiUsage: { tools: e.aiToolsUsed || aiToolsChecked.join(", "), learned: e.aiLearned, confidence: e.aiConfidence },
+    studentSelfRating: e.studentSelfRating,
+    facilitatorRating: e.facilitatorRating,
+    facilitatorComplete: hasFeedback(e),
+    facilitatorFeedback: {
+      strengths: e.strengthHighlights || e.practicalDoneWell || "",
+      improvements: e.suggestedImprovements || e.practicalNeedsImprovement || e.improvementAreas || "",
+      comments: e.additionalComments || "",
+      participation: e.participation || "",
+      discipline: e.discipline || "",
+      communication: e.communication || "",
+    },
+  };
+}
+
+// Fire-and-forget: ask the Edge Function to build the AI summary, store the report, and
+// (for student submissions) email the Program Heads. Never blocks or breaks saving.
+async function sendDailyReport(entry, role, studentEmail) {
+  const client = getSupabaseClient();
+  if (!client) return;
+  try {
+    const payload = buildReportPayload(entry, role);
+    if (studentEmail) payload.studentEmail = studentEmail;
+    await client.functions.invoke("daily-report", { body: payload });
+  } catch (error) {
+    console.error("[reports] Daily report could not be generated/sent (the saved entry is unaffected).", error);
+  }
 }
 
 function App() {
   const [entries, setEntries] = useState([]);
   const [form, setForm] = useState(emptyForm);
-  const [auth, setAuth] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem(AUTH_KEY)) || null;
-    } catch {
-      return null;
-    }
-  });
+  const [auth, setAuth] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
   const [query, setQuery] = useState("");
   const [dark, setDark] = useState(false);
   const [savedMessage, setSavedMessage] = useState("");
@@ -1048,6 +1145,7 @@ function App() {
   const [batchFilter, setBatchFilter] = useState("All batches");
   const [studentFilter, setStudentFilter] = useState("All students");
   const [categoryFilter, setCategoryFilter] = useState("Overall");
+  const [reports, setReports] = useState([]);
   const quote = useMemo(() => quotes[new Date().getDate() % quotes.length], []);
   const role = auth?.role || "student";
 
@@ -1059,6 +1157,7 @@ function App() {
       try {
         localEntries = saved ? JSON.parse(saved).map(normalizeEntry) : [];
         if (!cancelled) setEntries(localEntries);
+        if (!auth) return; // Cloud data needs a signed-in session; show local cache until then.
         const cloudEntries = await loadCloudEntries();
         if (!cancelled && cloudEntries) {
           setEntries(cloudEntries);
@@ -1079,24 +1178,70 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [auth?.id]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
   }, [entries]);
 
+  // Load stored daily reports for the dashboard (facilitators + program heads; students skip).
+  useEffect(() => {
+    if (!auth || role === "student") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await loadReports();
+        if (!cancelled && rows) setReports(rows);
+      } catch (error) {
+        console.error("[reports] Could not load report history.", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth?.id, role]);
+
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 
+  // Google sign-in via Supabase Auth. Supabase persists the session itself, so we no
+  // longer keep our own auth copy in localStorage. We read the current session on load,
+  // then keep `auth` in sync as the user signs in or out.
   useEffect(() => {
-    if (auth) {
-      localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
-      localStorage.setItem(ROLE_KEY, auth.role);
-    } else {
-      localStorage.removeItem(AUTH_KEY);
+    const client = getSupabaseClient();
+    if (!client) {
+      // Cloud sign-in isn't configured — the app still loads and shows a clear message.
+      setAuthLoading(false);
+      return;
     }
-  }, [auth]);
+    let active = true;
+    const handleSession = (session) => {
+      if (!active) return;
+      const user = session?.user;
+      if (!user) {
+        setAuth(null);
+        setAuthLoading(false);
+        return;
+      }
+      if (!isAllowedEmail(user.email)) {
+        setAuthError(`Please sign in with your @${getAllowedDomain()} Google account.`);
+        client.auth.signOut();
+        setAuth(null);
+        setAuthLoading(false);
+        return;
+      }
+      setAuthError("");
+      setAuth(authFromSupabaseUser(user));
+      setAuthLoading(false);
+    };
+    client.auth.getSession().then(({ data }) => handleSession(data.session));
+    const { data: sub } = client.auth.onAuthStateChange((_event, session) => handleSession(session));
+    return () => {
+      active = false;
+      sub?.subscription?.unsubscribe?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (!auth) return;
@@ -1161,17 +1306,35 @@ function App() {
   const RoleIcon = isFacilitator ? Award : UserRound;
   const roleBadgeLabel = isFacilitator ? "Facilitator" : "Student";
 
-  const login = (nextAuth) => {
-    setAuth(nextAuth);
-    setForm((current) => ({
-      ...current,
-      studentName: nextAuth.role === "student" ? nextAuth.name : current.studentName,
-      facilitatorName: nextAuth.role === "facilitator" ? nextAuth.name : current.facilitatorName,
-      schoolName: nextAuth.schoolName || current.schoolName,
-    }));
+  const signInWithGoogle = async () => {
+    const client = getSupabaseClient();
+    if (!client) {
+      setAuthError("Google sign-in isn't set up yet. Ask your admin to finish the Supabase + Google setup.");
+      return;
+    }
+    setAuthError("");
+    const redirectTo = window.location.href.split("#")[0].split("?")[0];
+    const { error } = await client.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo,
+        queryParams: { hd: getAllowedDomain(), prompt: "select_account" },
+      },
+    });
+    if (error) {
+      setAuthError(error.message || "Could not start Google sign-in. Please try again.");
+    }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    const client = getSupabaseClient();
+    if (client) {
+      try {
+        await client.auth.signOut();
+      } catch (error) {
+        console.error("[auth] Sign-out failed.", error);
+      }
+    }
     setAuth(null);
     setQuery("");
     setSavedMessage("");
@@ -1197,7 +1360,7 @@ function App() {
       return [entry, ...withoutCurrent].sort((a, b) => new Date(b.date) - new Date(a.date));
     });
     try {
-      const cloudSave = await upsertCloudEntry(entry, role);
+      const cloudSave = await upsertCloudEntry(entry, auth?.email || role);
       if (cloudSave.skipped) {
         setStorageMode("local");
         setSavedMessage(isFacilitator ? "Feedback saved on this device." : "Saved on this device.");
@@ -1208,6 +1371,9 @@ function App() {
             ? `Feedback saved for ${entry.studentName || "this student"}.`
             : "Saved successfully. Your facilitator can now see this.",
         );
+        // Generate + email the daily report (student submit) or refresh the stored report
+        // with facilitator feedback (facilitator save). Non-blocking.
+        sendDailyReport(entry, role, isStudent ? auth?.email : undefined);
       }
       setSaveState("saved");
       setCelebrateKey((value) => value + 1);
@@ -1248,8 +1414,19 @@ function App() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  if (authLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#faf9f5] text-[#141413] dark:bg-[#181715] dark:text-[#faf9f5]">
+        <div className="flex items-center gap-3 text-sm font-medium text-[#6c6a64] dark:text-[#a09d96]">
+          <Loader size={18} className="animate-spin" />
+          Checking your sign-in…
+        </div>
+      </main>
+    );
+  }
+
   if (!auth) {
-    return <LoginScreen onLogin={login} />;
+    return <LoginScreen onSignIn={signInWithGoogle} error={authError} />;
   }
 
   return (
@@ -1527,6 +1704,7 @@ function App() {
           />
           <MilestoneBoard milestones={milestones} />
           <FeedbackHistoryPanel entries={filteredEntries} isFacilitator={isFacilitator} />
+          {isFacilitator && <ReportHistoryPanel reports={reports} query={query} />}
           {isFacilitator && (
             <FacilitatorComparisonPanel
               entries={filteredEntries}
@@ -1641,26 +1819,28 @@ function Card({ icon: Icon, title, subtitle, children, dark = false, id }) {
   );
 }
 
-function LoginScreen({ onLogin }) {
-  const [loginRole, setLoginRole] = useState("student");
-  const [name, setName] = useState("");
-  const [schoolName, setSchoolName] = useState("");
-  const [error, setError] = useState("");
+function GoogleGlyph() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.49h4.84a4.14 4.14 0 0 1-1.79 2.72v2.26h2.9c1.7-1.57 2.65-3.88 2.65-6.63z" />
+      <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.81.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.96v2.33A9 9 0 0 0 9 18z" />
+      <path fill="#FBBC05" d="M3.95 10.7A5.41 5.41 0 0 1 3.66 9c0-.59.1-1.16.29-1.7V4.97H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.03l2.99-2.33z" />
+      <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.59A9 9 0 0 0 .96 4.97L3.95 7.3C4.66 5.17 6.65 3.58 9 3.58z" />
+    </svg>
+  );
+}
 
-  const submit = (event) => {
-    event.preventDefault();
-    const cleanName = name.trim();
-    if (!cleanName) {
-      setError("Please enter your name to continue.");
-      return;
+function LoginScreen({ onSignIn, error }) {
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSignIn = async () => {
+    setSubmitting(true);
+    try {
+      await onSignIn();
+    } finally {
+      // A successful sign-in redirects away from this page; if it didn't (an error), re-enable the button.
+      setSubmitting(false);
     }
-    onLogin({
-      id: `${loginRole}-${cleanName.toLowerCase().replace(/\s+/g, "-")}`,
-      role: loginRole,
-      name: cleanName,
-      schoolName: schoolName.trim(),
-      loggedInAt: new Date().toISOString(),
-    });
   };
 
   return (
@@ -1669,47 +1849,45 @@ function LoginScreen({ onLogin }) {
         <section>
           <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-[#efe9de] px-4 py-2 text-[13px] font-medium">
             <span className="text-[#cc785c]">✣</span>
-            Role based access
+            Secure organisation login
           </div>
           <h1 className="font-display text-5xl font-normal leading-[1.05] tracking-[-0.03em] sm:text-[64px]">
             Login to your progress tracker
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-8 text-[#3d3d3a]">
-            Students can fill their own daily progress. Facilitators can add feedback and review all student progress.
+            Sign in with your NavGurukul Google account. Students fill their own daily progress; facilitators review every
+            student's progress and add feedback.
           </p>
+          <ul className="mt-6 space-y-2 text-[15px] leading-7 text-[#6c6a64]">
+            <li className="flex items-start gap-2">
+              <span className="mt-1 text-[#cc785c]">✓</span>
+              Only <span className="font-medium text-[#141413]">@navgurukul.org</span> accounts can sign in.
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="mt-1 text-[#cc785c]">✓</span>
+              Your role (student or facilitator) is set automatically from your email.
+            </li>
+          </ul>
         </section>
 
-        <form className="rounded-2xl bg-[#efe9de] p-6 sm:p-8" onSubmit={submit}>
-          <div className="mb-6 grid grid-cols-2 gap-2 rounded-xl bg-[#f5f0e8] p-2">
-            {["student", "facilitator"].map((item) => (
-              <button
-                type="button"
-                key={item}
-                className={`h-11 rounded-lg text-sm font-medium capitalize ${
-                  loginRole === item ? "bg-[#cc785c] text-white" : "text-[#6c6a64]"
-                }`}
-                onClick={() => setLoginRole(item)}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
+        <div className="rounded-2xl bg-[#efe9de] p-6 sm:p-8">
+          <h2 className="font-display text-3xl font-normal tracking-[-0.02em]">Welcome</h2>
+          <p className="mt-2 text-sm leading-6 text-[#6c6a64]">Use your organisation Google account to continue.</p>
 
-          <div className="grid gap-4">
-            <Field label={loginRole === "student" ? "Student Name" : "Facilitator Name"} value={name} onChange={setName} placeholder="Enter your name" />
-            <Field label="School / Batch Name" value={schoolName} onChange={setSchoolName} placeholder="Enter school or batch" />
-          </div>
-
-          {error && <p className="mt-4 text-sm font-medium text-[#c64545]">{error}</p>}
-
-          <button className="mt-6 h-11 w-full rounded-lg bg-[#cc785c] px-5 text-sm font-medium text-white active:bg-[#a9583e]" type="submit">
-            Continue as {loginRole}
+          <button
+            type="button"
+            onClick={handleSignIn}
+            disabled={submitting}
+            className="mt-6 flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-[#e6dfd8] bg-white px-5 text-sm font-medium text-[#141413] shadow-sm transition hover:bg-[#faf9f5] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <GoogleGlyph />
+            {submitting ? "Opening Google…" : "Continue with Google"}
           </button>
 
-          <p className="mt-4 text-sm leading-6 text-[#6c6a64]">
-            This login is local to this browser. It controls what forms and progress records are visible on this device.
-          </p>
-        </form>
+          {error && <p className="mt-4 rounded-lg bg-[#f7e3dd] px-4 py-3 text-sm font-medium text-[#c64545]">{error}</p>}
+
+          <p className="mt-6 text-sm leading-6 text-[#6c6a64]">Your password stays with Google — this app never sees it.</p>
+        </div>
       </div>
     </main>
   );
@@ -2920,6 +3098,86 @@ function FeedbackHistoryPanel({ entries, isFacilitator }) {
         {!feedback.length && (
           <div className="rounded-xl bg-[#f5f0e8] p-4 text-sm leading-6 text-[#6c6a64] dark:bg-[#1f1e1b] dark:text-[#a09d96]">
             No facilitator feedback has been saved yet.
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function ReportSummaryList({ label, items, color }) {
+  if (!items || !items.length) return null;
+  return (
+    <div className="mt-2">
+      <p className="text-xs font-medium uppercase tracking-wide" style={{ color }}>{label}</p>
+      <ul className="mt-1 list-disc pl-5 text-sm leading-6 text-[#3d3d3a] dark:text-[#a09d96]">
+        {items.map((item, index) => (
+          <li key={index}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ReportHistoryPanel({ reports, query }) {
+  const lowered = (query || "").trim().toLowerCase();
+  const visible = (reports || []).filter(
+    (report) => !lowered || String(report.student_name || "").toLowerCase().includes(lowered),
+  );
+  const statusStyles = {
+    sent: "bg-[#5b8c5a] text-white",
+    failed: "bg-[#c64545] text-white",
+    pending: "bg-[#d9a441] text-white",
+    skipped: "bg-[#efe9de] text-[#6c6a64] dark:bg-[#252320] dark:text-[#a09d96]",
+  };
+  return (
+    <Card
+      icon={BarChart3}
+      title="Report History"
+      subtitle="AI performance summaries emailed to Program Heads. Newest first."
+    >
+      <div className="grid gap-4 lg:grid-cols-2">
+        {visible.map((report) => {
+          const cats = report.category_scores || {};
+          const summary = report.ai_summary || {};
+          return (
+            <article key={report.id || report.entry_id} className="rounded-xl bg-[#f5f0e8] p-4 dark:bg-[#1f1e1b]">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium text-[#141413] dark:text-[#faf9f5]">{report.student_name || "Unnamed student"}</p>
+                  <p className="text-sm text-[#6c6a64] dark:text-[#a09d96]">
+                    {report.report_date}
+                    {report.school_name ? ` · ${report.school_name}` : ""}
+                  </p>
+                </div>
+                <span className="rounded-full bg-[#181715] px-3 py-1 text-sm font-medium text-[#faf9f5]">{report.overall_score}%</span>
+              </div>
+
+              <div className="mb-1 grid gap-2 sm:grid-cols-2">
+                <SectionBar label="Practical" value={cats.practicals || 0} />
+                <SectionBar label="English" value={cats.english || 0} />
+                <SectionBar label="Theory" value={cats.theory || 0} />
+                <SectionBar label="Wellness" value={cats.wellness || 0} />
+              </div>
+
+              <ReportSummaryList label="Key achievements" items={summary.achievements} color="#5b8c5a" />
+              <ReportSummaryList label="Areas needing support" items={summary.areas_needing_support} color="#c96442" />
+              <ReportSummaryList label="Next steps" items={summary.next_steps} color="#5d8db8" />
+
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                <span className={`rounded-full px-2.5 py-1 font-medium ${statusStyles[report.email_status] || statusStyles.skipped}`}>
+                  Email: {report.email_status || "—"}
+                </span>
+                <span className="rounded-full bg-[#efe9de] px-2.5 py-1 font-medium text-[#6c6a64] dark:bg-[#252320] dark:text-[#a09d96]">
+                  {report.facilitator_complete ? "Facilitator reviewed" : "Awaiting facilitator"}
+                </span>
+              </div>
+            </article>
+          );
+        })}
+        {!visible.length && (
+          <div className="rounded-xl bg-[#f5f0e8] p-4 text-sm leading-6 text-[#6c6a64] dark:bg-[#1f1e1b] dark:text-[#a09d96]">
+            No reports yet. Reports appear here automatically when students submit their daily tracker.
           </div>
         )}
       </div>
