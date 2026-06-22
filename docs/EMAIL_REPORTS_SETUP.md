@@ -6,7 +6,7 @@ When a **student submits** their daily tracker, the app automatically:
 3. **stores it** in a `daily_reports` table, shown in the dashboard's **Report History** card
    (visible to facilitators and program heads).
 
-The code is done. This guide covers the **one-time setup** on Supabase, Resend, and Anthropic.
+The code is done. This guide covers the **one-time setup** on Supabase, Resend, and Inception (Mercury).
 Some steps use the **Supabase CLI** — if that's unfamiliar, a tech teammate can do Steps 4–5 in
 a few minutes. I can also walk you through it.
 
@@ -18,7 +18,9 @@ a few minutes. I can also walk you through it.
 ## What you'll need
 - The Supabase project (`almhhzssdirqlmznsmkt`).
 - A **Resend** account (free tier is fine to start): https://resend.com
-- An **Anthropic API key** for the AI summary: https://console.anthropic.com
+- An **Inception (Mercury) API key** for the AI summary: https://platform.inceptionlabs.ai
+  (new accounts get 10 million free tokens). This is **optional** — without it, the email still
+  sends with a built-in rule-based summary.
 - The **Program Head email address(es)** that should receive reports.
 
 ---
@@ -37,9 +39,10 @@ This creates `daily_reports` and its security rules (only facilitators/program h
      from something like `reports@navgurukul.org`. (Domain verification may need IT to add DNS records.)
 3. Copy your **Resend API key** (starts with `re_`).
 
-## Step 3 — Anthropic (AI summary)
-1. Sign in at the Anthropic Console and create an **API key**.
-2. Copy it (starts with `sk-ant-`). The app uses the low-cost **Claude Haiku** model by default.
+## Step 3 — Inception / Mercury (AI summary) — optional
+1. Sign in at https://platform.inceptionlabs.ai → **API Keys** → create a key.
+2. Copy it. New accounts include **10 million free tokens**; the app uses the **mercury-2** model by default.
+3. Skip this step entirely if you don't want AI wording — the email still sends a built-in summary.
 
 ## Step 4 — Deploy the Edge Function
 The function lives at [`supabase/functions/daily-report/`](../supabase/functions/daily-report/).
@@ -61,8 +64,9 @@ CLI:
 supabase secrets set RESEND_API_KEY="re_xxx"
 supabase secrets set RESEND_FROM="Student Tracker <reports@navgurukul.org>"
 supabase secrets set PROGRAM_HEAD_EMAILS="head1@navgurukul.org,head2@navgurukul.org"
-supabase secrets set ANTHROPIC_API_KEY="sk-ant-xxx"
-# optional: supabase secrets set REPORT_MODEL="claude-haiku-4-5"
+# optional AI wording (skip for the free built-in summary):
+supabase secrets set INCEPTION_API_KEY="your-inception-key"
+# optional: supabase secrets set REPORT_MODEL="mercury-2"
 ```
 Or set the same keys in the dashboard under **Edge Functions → daily-report → Secrets**.
 (`SUPABASE_URL` and the service role key are provided automatically — don't set those.)
@@ -81,9 +85,9 @@ Or set the same keys in the dashboard under **Edge Functions → daily-report �
 ---
 
 ## Good to know
-- **Cost:** each student submission makes one AI call + one email. Claude Haiku keeps the AI
-  cost tiny; Resend's free tier covers a few thousand emails/month. A daily-digest option can
-  be added later if volume grows.
+- **Cost:** each student submission makes one AI call + one email. Mercury's 10M free tokens
+  cover a long time of daily use (and it's very cheap after); Resend's free tier covers a few
+  thousand emails/month. A daily-digest option can be added later if volume grows.
 - **Re-saves don't spam:** the report is keyed to the student's day, so editing a submission
   updates the stored report without sending another email.
 - **If the AI call fails**, the email still sends with a simple rule-based summary.

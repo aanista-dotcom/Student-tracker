@@ -1555,7 +1555,7 @@ function App() {
         </section>
 
         <section className="grid gap-6 lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_minmax(380px,420px)]">
-          <div id="tracker" className="grid gap-6 scroll-mt-24">
+          <div id="tracker" className="grid content-start gap-6 scroll-mt-24">
             {isStudent ? (
               <StudentQuickFlow
                 form={form}
@@ -1584,25 +1584,6 @@ function App() {
                 saveState={saveState}
               />
             )}
-          </div>
-
-          <aside className="grid content-start gap-6">
-            <Card icon={BarChart3} title="Dashboard & Analytics" subtitle="Live summary from saved and current progress." dark>
-              <div className="grid gap-3">
-                <ProgressTile label="Overall progress" value={score} large dark index={0} />
-                <div className="grid grid-cols-2 gap-3">
-                  <ProgressTile label="Daily recorded" value={dailyScore} helper={`${filteredEntries.length ? latestEntry.date : "Today"}`} dark index={1} />
-                  <ProgressTile label="Weekly average" value={weeklyScore} helper={`${weeklyEntries.length} day${weeklyEntries.length === 1 ? "" : "s"}`} dark index={2} />
-                  <ProgressTile label="Monthly average" value={monthlyScore} helper={`${monthlyEntries.length} day${monthlyEntries.length === 1 ? "" : "s"}`} dark index={3} />
-                  <ProgressTile label="Water intake" value={Math.round((waterToNumber(form.waterIntake) / 3) * 100)} helper={form.waterIntake} dark index={4} />
-                  <ProgressTile label="English speaking" value={parsePercent(form.englishSpeaking)} dark index={5} />
-                  <ProgressTile label="Theory completion" value={parsePercent(form.theoryCompletion)} dark index={6} />
-                  <ProgressTile label="Practical completion" value={parsePercent(form.practicalCompletion)} dark index={7} />
-                  <ProgressTile label="Emotional wellbeing" value={Number(form.emotionalRating) * 10} helper={`${form.emotionalRating}/10`} dark index={8} />
-                  <ProgressTile label="AI confidence" value={Number(form.aiConfidence) * 10} helper={`${form.aiConfidence}/10`} dark index={9} />
-                </div>
-              </div>
-            </Card>
 
             <Card icon={Sparkles} title="Growth Garden" subtitle="Your tree grows as you log days and raise your scores.">
               <div className="relative h-72 overflow-hidden rounded-xl border border-[#e6dfd8] dark:border-white/10">
@@ -1643,6 +1624,25 @@ function App() {
                     {badge}
                   </span>
                 ))}
+              </div>
+            </Card>
+          </div>
+
+          <aside className="grid content-start gap-6">
+            <Card icon={BarChart3} title="Dashboard & Analytics" subtitle="Live summary from saved and current progress." dark>
+              <div className="grid gap-3">
+                <ProgressTile label="Overall progress" value={score} large dark index={0} />
+                <div className="grid grid-cols-2 gap-3">
+                  <ProgressTile label="Daily recorded" value={dailyScore} helper={`${filteredEntries.length ? latestEntry.date : "Today"}`} dark index={1} />
+                  <ProgressTile label="Weekly average" value={weeklyScore} helper={`${weeklyEntries.length} day${weeklyEntries.length === 1 ? "" : "s"}`} dark index={2} />
+                  <ProgressTile label="Monthly average" value={monthlyScore} helper={`${monthlyEntries.length} day${monthlyEntries.length === 1 ? "" : "s"}`} dark index={3} />
+                  <ProgressTile label="Water intake" value={Math.round((waterToNumber(form.waterIntake) / 3) * 100)} helper={form.waterIntake} dark index={4} />
+                  <ProgressTile label="English speaking" value={parsePercent(form.englishSpeaking)} dark index={5} />
+                  <ProgressTile label="Theory completion" value={parsePercent(form.theoryCompletion)} dark index={6} />
+                  <ProgressTile label="Practical completion" value={parsePercent(form.practicalCompletion)} dark index={7} />
+                  <ProgressTile label="Emotional wellbeing" value={Number(form.emotionalRating) * 10} helper={`${form.emotionalRating}/10`} dark index={8} />
+                  <ProgressTile label="AI confidence" value={Number(form.aiConfidence) * 10} helper={`${form.aiConfidence}/10`} dark index={9} />
+                </div>
               </div>
             </Card>
 

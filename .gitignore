@@ -10,3 +10,4 @@ backups/
 backup.log
 restore.log
 .claude/
+supabase/.temp/

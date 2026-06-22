@@ -11,8 +11,9 @@
 //   RESEND_FROM           verified sender, e.g. "Student Tracker <reports@yourdomain.org>"
 //                         (for first tests you can use "onboarding@resend.dev")
 //   PROGRAM_HEAD_EMAILS   comma-separated recipient list, e.g. "head1@navgurukul.org,head2@navgurukul.org"
-//   ANTHROPIC_API_KEY     Anthropic API key (for the AI summary)
-//   REPORT_MODEL          optional, defaults to "claude-haiku-4-5"
+//   INCEPTION_API_KEY     Inception (Mercury) API key for the AI summary — OPTIONAL.
+//                         Without it, a built-in rule-based summary is used and the email still sends.
+//   REPORT_MODEL          optional, defaults to "mercury-2"
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by the platform automatically.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -43,8 +44,8 @@ function textOrPending(value: unknown, complete: boolean): string {
 // ---- AI summary -----------------------------------------------------------
 
 async function generateAiSummary(report: any): Promise<any> {
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  const model = Deno.env.get("REPORT_MODEL") || "claude-haiku-4-5";
+  const apiKey = Deno.env.get("INCEPTION_API_KEY");
+  const model = Deno.env.get("REPORT_MODEL") || "mercury-2";
   const fallback = templatedSummary(report);
   if (!apiKey) return fallback;
 
@@ -70,26 +71,27 @@ async function generateAiSummary(report: any): Promise<any> {
     "Each array has 2-3 short, plain-English bullet points.";
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch("https://api.inceptionlabs.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         model,
         max_tokens: 600,
-        system,
-        messages: [{ role: "user", content: `Summarise this student's day:\n\n${facts}` }],
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: `Summarise this student's day:\n\n${facts}` },
+        ],
       }),
     });
     if (!res.ok) {
-      console.error("[daily-report] Anthropic error", res.status, await res.text());
+      console.error("[daily-report] Inception (Mercury) API error", res.status, await res.text());
       return fallback;
     }
     const data = await res.json();
-    const text = (data?.content?.[0]?.text || "").trim();
+    const text = (data?.choices?.[0]?.message?.content || "").trim();
     const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
     const parsed = JSON.parse(cleaned);
     return {
