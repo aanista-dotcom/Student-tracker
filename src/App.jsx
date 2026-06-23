@@ -1702,7 +1702,7 @@ function App() {
             </Card>
 
             <Card id="reports" icon={Search} title={isFacilitator ? "All Student Progress" : "My Saved Progress"} subtitle="Tap any saved day to review or export it as a PDF report.">
-              <div className="grid gap-3">
+              <div className={isFacilitator ? "grid gap-3 sm:grid-cols-2" : "grid gap-3"}>
                 {filteredEntries.length === 0 && <p className="text-sm text-[#6c6a64] dark:text-[#a09d96]">No saved days yet. Fill the form and press Save.</p>}
                 {filteredEntries.slice(0, isFacilitator ? 20 : 8).map((entry) => (
                   <button
