@@ -135,6 +135,12 @@ const UserRound = (props) => (
     <path d="M20 21a8 8 0 0 0-16 0" />
   </Icon>
 );
+const Lock = (props) => (
+  <Icon {...props}>
+    <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </Icon>
+);
 
 const STORAGE_KEY = "student-progress-tracker:v5";
 const ROLE_KEY = "student-progress-tracker:role:v2";
@@ -1607,23 +1613,59 @@ function App() {
             </Card>
 
             <Card icon={Award} title="Achievement Badges" subtitle="Friendly wins appear as habits grow.">
-              {streak > 0 && (
-                <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-[#cc785c]/10 px-4 py-2 text-sm font-medium text-[#cc785c] dark:bg-[#cc785c]/15">
-                  <Flame size={18} className="animate-float" />
-                  <span className="tabular-nums">{streak}-day streak</span>
-                </div>
-              )}
-              <div className="flex flex-wrap gap-2">
-                {badges.map((badge, i) => (
-                  <span
-                    key={badge}
-                    className="animate-scale-in inline-flex items-center gap-1.5 rounded-full bg-[#efe9de] px-3 py-2 text-[13px] font-medium text-[#141413] dark:bg-[#252320] dark:text-[#faf9f5]"
-                    style={{ animationDelay: `${i * 80}ms` }}
-                  >
-                    <Check size={14} className="text-[#5b8c5a]" />
-                    {badge}
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#5b8c5a]/10 px-3 py-1.5 text-sm font-medium text-[#5b8c5a] dark:bg-[#5b8c5a]/15">
+                  <Check size={16} />
+                  <span className="tabular-nums">{badges.filter((b) => b.earned).length} of {badges.length} earned</span>
+                </span>
+                {streak > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#cc785c]/10 px-3 py-1.5 text-sm font-medium text-[#cc785c] dark:bg-[#cc785c]/15">
+                    <Flame size={16} className="animate-float" />
+                    <span className="tabular-nums">{streak}-day streak</span>
                   </span>
-                ))}
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {badges.map((badge, i) => {
+                  const BadgeIcon = badge.earned ? badge.icon : Lock;
+                  return (
+                    <div
+                      key={badge.label}
+                      title={badge.earned ? "Earned" : badge.hint}
+                      className={
+                        "animate-scale-in flex flex-col items-center gap-2 rounded-xl border px-3 py-4 text-center " +
+                        (badge.earned
+                          ? "border-[#cc785c]/30 bg-[#cc785c]/10 dark:border-[#cc785c]/30 dark:bg-[#cc785c]/15"
+                          : "border-dashed border-[#d8d0c6] bg-transparent opacity-70 dark:border-white/10")
+                      }
+                      style={{ animationDelay: `${i * 80}ms` }}
+                    >
+                      <span
+                        className={
+                          "grid h-10 w-10 place-items-center rounded-full " +
+                          (badge.earned
+                            ? "bg-[#faf9f5] text-[#cc785c] dark:bg-[#181715]"
+                            : "bg-[#efe9de] text-[#a09d96] dark:bg-[#252320] dark:text-[#6c6a64]")
+                        }
+                      >
+                        <BadgeIcon size={20} />
+                      </span>
+                      <span
+                        className={
+                          "text-[13px] font-medium leading-tight " +
+                          (badge.earned
+                            ? "text-[#141413] dark:text-[#faf9f5]"
+                            : "text-[#6c6a64] dark:text-[#a09d96]")
+                        }
+                      >
+                        {badge.label}
+                      </span>
+                      <span className="text-[11px] leading-tight text-[#a09d96] dark:text-[#6c6a64]">
+                        {badge.earned ? "Earned" : badge.hint}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </Card>
           </div>
@@ -1647,13 +1689,15 @@ function App() {
             </Card>
 
             <Card icon={BarChart3} title="Weekly Progress Charts" subtitle="Saved entries show growth trends." dark>
-              <MiniChart title="Overall" entries={weeklyEntries} getValue={getScore} dark />
-              <MiniChart title="Water" entries={weeklyEntries} getValue={(entry) => Math.round((waterToNumber(entry.waterIntake) / 3) * 100)} dark />
-              <MiniChart title="English" entries={weeklyEntries} getValue={(entry) => parsePercent(entry.englishSpeaking)} dark />
-              <MiniChart title="Theory" entries={weeklyEntries} getValue={(entry) => parsePercent(entry.theoryCompletion)} dark />
-              <MiniChart title="Practical" entries={weeklyEntries} getValue={(entry) => parsePercent(entry.practicalCompletion)} dark />
-              <MiniChart title="Wellbeing" entries={weeklyEntries} getValue={(entry) => Number(entry.emotionalRating) * 10} dark />
-              <MiniChart title="AI usage" entries={weeklyEntries} getValue={(entry) => aiChecks.filter((label) => entry.checks?.[label]).length * 12.5} dark />
+              <div className="grid gap-x-4 sm:grid-cols-2">
+                <MiniChart title="Overall" entries={weeklyEntries} getValue={getScore} dark />
+                <MiniChart title="Water" entries={weeklyEntries} getValue={(entry) => Math.round((waterToNumber(entry.waterIntake) / 3) * 100)} dark />
+                <MiniChart title="English" entries={weeklyEntries} getValue={(entry) => parsePercent(entry.englishSpeaking)} dark />
+                <MiniChart title="Theory" entries={weeklyEntries} getValue={(entry) => parsePercent(entry.theoryCompletion)} dark />
+                <MiniChart title="Practical" entries={weeklyEntries} getValue={(entry) => parsePercent(entry.practicalCompletion)} dark />
+                <MiniChart title="Wellbeing" entries={weeklyEntries} getValue={(entry) => Number(entry.emotionalRating) * 10} dark />
+                <MiniChart title="AI usage" entries={weeklyEntries} getValue={(entry) => aiChecks.filter((label) => entry.checks?.[label]).length * 12.5} dark />
+              </div>
               <AttendanceDots entries={weeklyEntries} dark />
             </Card>
 
@@ -3245,15 +3289,17 @@ function calculateStreak(entries) {
 }
 
 function getBadges(form, streak) {
-  const badges = [];
-  if (streak >= 3) badges.push("3-day streak");
-  if (form.attendance === "Present") badges.push("Present today");
-  if (parsePercent(form.englishSpeaking) >= 60) badges.push("English effort");
-  if (Number(form.emotionalRating) >= 7) badges.push("Wellbeing win");
-  if (Number(form.aiConfidence) >= 7) badges.push("AI explorer");
-  if (parsePercent(form.practicalCompletion) >= 75) badges.push("Practical progress");
-  if (!badges.length) badges.push("Ready to begin");
-  return badges;
+  // Every possible badge, always returned, with whether it's earned yet and a
+  // short hint of how to unlock it. The card shows earned ones highlighted and
+  // not-yet-earned ones faded, so it always feels full and gives a goal to aim for.
+  return [
+    { label: "3-day streak", icon: Flame, earned: streak >= 3, hint: "Log 3 days in a row" },
+    { label: "Present today", icon: CalendarDays, earned: form.attendance === "Present", hint: "Mark attendance present" },
+    { label: "English effort", icon: Sparkles, earned: parsePercent(form.englishSpeaking) >= 60, hint: "Reach 60% English speaking" },
+    { label: "Wellbeing win", icon: HeartHandshake, earned: Number(form.emotionalRating) >= 7, hint: "Rate wellbeing 7 or higher" },
+    { label: "AI explorer", icon: Award, earned: Number(form.aiConfidence) >= 7, hint: "Rate AI confidence 7 or higher" },
+    { label: "Practical progress", icon: CheckCircle, earned: parsePercent(form.practicalCompletion) >= 75, hint: "Reach 75% practical completion" },
+  ];
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
