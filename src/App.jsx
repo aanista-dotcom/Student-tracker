@@ -261,6 +261,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 const emptyForm = {
   studentName: "",
   date: today(),
+  period: "week", // facilitator cadence: "week" | "month" (students always save as "day")
   facilitatorName: "",
   schoolName: "",
   attendance: "Present",
@@ -980,6 +981,41 @@ function isThisMonth(entry) {
   return entryDate.getFullYear() === now.getFullYear() && entryDate.getMonth() === now.getMonth();
 }
 
+// --- Period helpers (facilitators log Weekly or Monthly instead of daily) ---
+// Parse "YYYY-MM-DD" as a LOCAL date so week/month math doesn't drift by timezone.
+function parseLocalDate(dateStr) {
+  const parts = String(dateStr || "").split("-").map(Number);
+  if (parts.length < 3 || parts.some(Number.isNaN)) return new Date();
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+function toISODate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+// Monday that starts the week containing dateStr.
+function weekStartOf(dateStr) {
+  const d = parseLocalDate(dateStr);
+  const diff = (d.getDay() + 6) % 7; // 0 = Monday
+  d.setDate(d.getDate() - diff);
+  return toISODate(d);
+}
+function weekLabel(dateStr) {
+  const start = parseLocalDate(weekStartOf(dateStr));
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  const opts = { month: "short", day: "numeric" };
+  return `Week of ${start.toLocaleDateString("en", opts)} – ${end.toLocaleDateString("en", opts)}`;
+}
+// Full "June 2026" label (distinct from the existing short monthLabel used elsewhere).
+function periodMonthLabel(dateStr) {
+  return parseLocalDate(dateStr).toLocaleDateString("en", { month: "long", year: "numeric" });
+}
+// Human label for a saved record, based on how it was logged.
+function periodLabel(entry) {
+  if (entry?.period === "week") return weekLabel(entry.date);
+  if (entry?.period === "month") return periodMonthLabel(entry.date);
+  return entry?.date || "";
+}
+
 function getAppConfig() {
   return window.APP_CONFIG || {};
 }
@@ -1360,7 +1396,23 @@ function App() {
 
   const saveProgress = async () => {
     setSaveState("saving");
-    const entry = { ...form, id: `${form.studentName || "student"}-${form.date}`, lastUpdatedBy: role, savedAt: new Date().toISOString() };
+    // Students save one record per day. Facilitators save one review per student
+    // per WEEK (or per MONTH), so a single review replaces seven daily entries.
+    const idBase = form.studentName || "student";
+    let entryDate = form.date;
+    let entryPeriod = "day";
+    let id = `${idBase}-${form.date}`;
+    if (!isStudent) {
+      entryPeriod = form.period === "month" ? "month" : "week";
+      if (entryPeriod === "month") {
+        entryDate = `${monthKey(form.date)}-01`;
+        id = `${idBase}-month-${monthKey(form.date)}`;
+      } else {
+        entryDate = weekStartOf(form.date);
+        id = `${idBase}-week-${entryDate}`;
+      }
+    }
+    const entry = { ...form, date: entryDate, period: entryPeriod, id, lastUpdatedBy: role, savedAt: new Date().toISOString() };
     setEntries((current) => {
       const withoutCurrent = current.filter((item) => item.id !== entry.id);
       return [entry, ...withoutCurrent].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -1377,9 +1429,9 @@ function App() {
             ? `Feedback saved for ${entry.studentName || "this student"}.`
             : "Saved successfully. Your facilitator can now see this.",
         );
-        // Generate + email the daily report (student submit) or refresh the stored report
-        // with facilitator feedback (facilitator save). Non-blocking.
-        sendDailyReport(entry, role, isStudent ? auth?.email : undefined);
+        // The daily Program-Head email fires on a STUDENT submit. Facilitators now
+        // review weekly/monthly, so their saves stay in the dashboard and don't email.
+        if (isStudent) sendDailyReport(entry, role, auth?.email);
       }
       setSaveState("saved");
       setCelebrateKey((value) => value + 1);
@@ -1701,10 +1753,21 @@ function App() {
               <AttendanceDots entries={weeklyEntries} dark />
             </Card>
 
-            <Card id="reports" icon={Search} title={isFacilitator ? "All Student Progress" : "My Saved Progress"} subtitle="Tap any saved day to review or export it as a PDF report.">
-              <div className={isFacilitator ? "grid gap-3 sm:grid-cols-2" : "grid gap-3"}>
-                {filteredEntries.length === 0 && <p className="text-sm text-[#6c6a64] dark:text-[#a09d96]">No saved days yet. Fill the form and press Save.</p>}
-                {filteredEntries.slice(0, isFacilitator ? 20 : 8).map((entry) => (
+            <Card
+              id="reports"
+              icon={Search}
+              title={isFacilitator ? `All Student Progress (${filteredEntries.length})` : "My Saved Progress"}
+              subtitle="Tap any saved record to review or export it as a PDF report."
+            >
+              <div
+                className={
+                  isFacilitator
+                    ? "grid max-h-[70vh] gap-3 overflow-y-auto pr-1 sm:grid-cols-2"
+                    : "grid gap-3"
+                }
+              >
+                {filteredEntries.length === 0 && <p className="text-sm text-[#6c6a64] dark:text-[#a09d96]">No saved records yet. Fill the form and press Save.</p>}
+                {(isFacilitator ? filteredEntries : filteredEntries.slice(0, 8)).map((entry) => (
                   <button
                     key={entry.id}
                     className="rounded-xl border border-[#e6dfd8] bg-[#faf9f5] p-4 text-left transition dark:border-white/10 dark:bg-[#252320]"
@@ -1714,7 +1777,7 @@ function App() {
                       <div>
                         <p className="font-medium text-[#141413] dark:text-[#faf9f5]">{entry.studentName || "Unnamed student"}</p>
                         <p className="text-sm text-[#6c6a64] dark:text-[#a09d96]">
-                          {entry.date} • {entry.schoolName || "No school"}
+                          {periodLabel(entry)} • {entry.schoolName || "No school"}
                         </p>
                       </div>
                       <span className="rounded-full bg-[#cc785c] px-3 py-1 text-sm font-medium text-white">
@@ -2250,10 +2313,35 @@ function FacilitatorCompactFlow({
 }) {
   return (
     <>
-      <Card icon={UserRound} title="Student Review" subtitle="Select a saved student record or create feedback for a new daily record.">
+      <Card icon={UserRound} title="Student Review" subtitle="Pick a review period, choose a student, and write one review for the whole week or month.">
+        <div className="mb-5 flex flex-wrap items-center gap-3">
+          <span className="text-sm font-medium text-[#3d3d3a] dark:text-[#faf9f5]">Review period</span>
+          <div className="flex rounded-lg border border-[#e6dfd8] bg-[#faf9f5] p-1 dark:border-white/10 dark:bg-[#252320]">
+            {[["week", "Weekly"], ["month", "Monthly"]].map(([value, label]) => {
+              const active = (form.period === "month" ? "month" : "week") === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  className={`h-8 rounded-md px-4 text-sm font-medium transition ${active ? "bg-[#cc785c] text-white" : "text-[#6c6a64] dark:text-[#a09d96]"}`}
+                  onClick={() => update("period", value)}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <span className="text-sm text-[#6c6a64] dark:text-[#a09d96]">
+            Saving as <span className="font-medium text-[#cc785c]">{form.period === "month" ? periodMonthLabel(form.date) : weekLabel(form.date)}</span>
+          </span>
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Student Name" value={form.studentName} onChange={(value) => update("studentName", value)} placeholder="Enter student name" />
-          <Field label="Date" type="date" value={form.date} onChange={(value) => update("date", value)} />
+          {form.period === "month" ? (
+            <Field label="Month" type="month" value={monthKey(form.date)} onChange={(value) => update("date", `${value}-01`)} />
+          ) : (
+            <Field label="Week of (pick any day in the week)" type="date" value={form.date} onChange={(value) => update("date", value)} />
+          )}
           <Field label="Facilitator Name" value={form.facilitatorName} onChange={(value) => update("facilitatorName", value)} disabled />
           <Field label="School / Batch Name" value={form.schoolName} onChange={(value) => update("schoolName", value)} placeholder="School or batch" />
           <Select label="Attendance" value={form.attendance} options={attendance} onChange={(value) => update("attendance", value)} />
@@ -2270,7 +2358,7 @@ function FacilitatorCompactFlow({
                   onClick={() => loadEntry(entry)}
                 >
                   <span className="font-medium">{entry.studentName || "Unnamed student"}</span>
-                  <span className="ml-2 text-[#6c6a64] dark:text-[#a09d96]">{entry.date} • {getScore(entry)}%</span>
+                  <span className="ml-2 text-[#6c6a64] dark:text-[#a09d96]">{periodLabel(entry)} • {getScore(entry)}%</span>
                 </button>
               ))}
             </div>
