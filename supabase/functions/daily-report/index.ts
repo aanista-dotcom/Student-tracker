@@ -275,26 +275,18 @@ Deno.serve(async (req) => {
     return json({ ok: true, mode, emailed: false });
   }
 
-  // Student submit: generate AI summary + store. Email only if not already sent.
+  // Student submit: generate the AI summary + store the row (this powers the
+  // dashboard's Report History). Emails are NOT sent per day anymore — the
+  // `weekly-report` function sends one combined digest to Program Heads each
+  // week. We keep any previously-sent status so old rows still read correctly.
   const summary = await generateAiSummary(report);
-  const alreadySent = existing?.email_status === "sent";
-  let emailStatus = existing?.email_status || "pending";
-  let emailError: string | null = null;
-  let emailed = false;
-
-  if (!alreadySent) {
-    const result = await sendEmail(report, summary, recipients);
-    emailed = result.ok;
-    emailStatus = result.ok ? "sent" : "failed";
-    emailError = result.error || null;
-    if (!result.ok) console.error("[daily-report] Email send failed:", result.error);
-  }
+  const emailStatus = existing?.email_status === "sent" ? "sent" : "weekly";
 
   const { error } = await supabase.from("daily_reports").upsert(
-    { ...baseRow, ai_summary: summary, email_status: emailStatus, email_error: emailError },
+    { ...baseRow, ai_summary: summary, email_status: emailStatus, email_error: null },
     { onConflict: "entry_id" },
   );
   if (error) return json({ error: error.message }, 500);
 
-  return json({ ok: true, mode, emailed, email_status: emailStatus });
+  return json({ ok: true, mode, emailed: false, email_status: emailStatus });
 });

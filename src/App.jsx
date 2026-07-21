@@ -3260,13 +3260,21 @@ function ReportHistoryPanel({ reports, query }) {
     sent: "bg-[#5b8c5a] text-white",
     failed: "bg-[#c64545] text-white",
     pending: "bg-[#d9a441] text-white",
+    weekly: "bg-[#efe9de] text-[#6c6a64] dark:bg-[#252320] dark:text-[#a09d96]",
     skipped: "bg-[#efe9de] text-[#6c6a64] dark:bg-[#252320] dark:text-[#a09d96]",
+  };
+  const statusLabels = {
+    sent: "Emailed",
+    failed: "Email failed",
+    pending: "Email pending",
+    weekly: "In weekly digest",
+    skipped: "Not emailed",
   };
   return (
     <Card
       icon={BarChart3}
       title="Report History"
-      subtitle="AI performance summaries emailed to Program Heads. Newest first."
+      subtitle="AI performance summaries. A combined weekly digest is emailed to Program Heads on Saturdays."
     >
       <div className="grid gap-4 lg:grid-cols-2">
         {visible.map((report) => {
@@ -3298,7 +3306,7 @@ function ReportHistoryPanel({ reports, query }) {
 
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
                 <span className={`rounded-full px-2.5 py-1 font-medium ${statusStyles[report.email_status] || statusStyles.skipped}`}>
-                  Email: {report.email_status || "—"}
+                  {statusLabels[report.email_status] || "Not emailed"}
                 </span>
                 <span className="rounded-full bg-[#efe9de] px-2.5 py-1 font-medium text-[#6c6a64] dark:bg-[#252320] dark:text-[#a09d96]">
                   {report.facilitator_complete ? "Facilitator reviewed" : "Awaiting facilitator"}
