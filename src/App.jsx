@@ -256,7 +256,9 @@ const quotes = [
   "Your effort today is building tomorrow's confidence.",
 ];
 
-const today = () => new Date().toISOString().slice(0, 10);
+// Local calendar date (YYYY-MM-DD). Uses local time, not UTC, so it stays correct
+// for IST users early in the day. toISODate is a hoisted function declaration below.
+const today = () => toISODate(new Date());
 
 const emptyForm = {
   studentName: "",
@@ -1399,16 +1401,20 @@ function App() {
     // Students save one record per day. Facilitators save one review per student
     // per WEEK (or per MONTH), so a single review replaces seven daily entries.
     const idBase = form.studentName || "student";
-    let entryDate = form.date;
+    // Never store a future date: a record must reflect a day that has happened, and the
+    // weekly digest looks back from today — future-dated rows would silently fall outside it.
+    const todayStr = today();
+    const baseDate = !form.date || form.date > todayStr ? todayStr : form.date;
+    let entryDate = baseDate;
     let entryPeriod = "day";
-    let id = `${idBase}-${form.date}`;
+    let id = `${idBase}-${baseDate}`;
     if (!isStudent) {
       entryPeriod = form.period === "month" ? "month" : "week";
       if (entryPeriod === "month") {
-        entryDate = `${monthKey(form.date)}-01`;
-        id = `${idBase}-month-${monthKey(form.date)}`;
+        entryDate = `${monthKey(baseDate)}-01`;
+        id = `${idBase}-month-${monthKey(baseDate)}`;
       } else {
-        entryDate = weekStartOf(form.date);
+        entryDate = weekStartOf(baseDate);
         id = `${idBase}-week-${entryDate}`;
       }
     }
@@ -2085,7 +2091,7 @@ function StudentQuickFlow({
           <div className="grid gap-5">
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Student Name" value={form.studentName} onChange={(value) => update("studentName", value)} disabled />
-              <Field label="Date" type="date" value={form.date} onChange={(value) => update("date", value)} />
+              <Field label="Date" type="date" value={form.date} max={today()} onChange={(value) => update("date", value)} />
               <Field label="School / Batch Name" value={form.schoolName} onChange={(value) => update("schoolName", value)} placeholder="School or batch" />
               <Select label="Attendance" value={form.attendance} options={attendance} onChange={(value) => update("attendance", value)} />
               <Select label="Mood" value={form.mood} options={moods} onChange={(value) => update("mood", value)} />
@@ -2338,9 +2344,9 @@ function FacilitatorCompactFlow({
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Student Name" value={form.studentName} onChange={(value) => update("studentName", value)} placeholder="Enter student name" />
           {form.period === "month" ? (
-            <Field label="Month" type="month" value={monthKey(form.date)} onChange={(value) => update("date", `${value}-01`)} />
+            <Field label="Month" type="month" value={monthKey(form.date)} max={monthKey(today())} onChange={(value) => update("date", `${value}-01`)} />
           ) : (
-            <Field label="Week of (pick any day in the week)" type="date" value={form.date} onChange={(value) => update("date", value)} />
+            <Field label="Week of (pick any day in the week)" type="date" value={form.date} max={today()} onChange={(value) => update("date", value)} />
           )}
           <Field label="Facilitator Name" value={form.facilitatorName} onChange={(value) => update("facilitatorName", value)} disabled />
           <Field label="School / Batch Name" value={form.schoolName} onChange={(value) => update("schoolName", value)} placeholder="School or batch" />
@@ -2469,7 +2475,7 @@ function RoleToggle({ role, onChange }) {
   );
 }
 
-function Field({ label, value, onChange, type = "text", placeholder = "", disabled = false }) {
+function Field({ label, value, onChange, type = "text", placeholder = "", disabled = false, max, min }) {
   return (
     <label className="grid gap-2">
       <span className="text-sm font-medium text-[#3d3d3a] dark:text-[#faf9f5]">{label}</span>
@@ -2479,6 +2485,8 @@ function Field({ label, value, onChange, type = "text", placeholder = "", disabl
         value={value}
         placeholder={placeholder}
         disabled={disabled}
+        max={max}
+        min={min}
         onChange={(event) => onChange(event.target.value)}
       />
     </label>
