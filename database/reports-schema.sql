@@ -19,7 +19,8 @@ create table if not exists public.daily_reports (
   ai_summary jsonb not null default '{}'::jsonb,        -- { achievements[], areas_needing_support[], next_steps[] }
   facilitator_complete boolean not null default false,  -- was facilitator rating/feedback present when stored
   recipients text[] not null default '{}',
-  email_status text not null default 'pending' check (email_status in ('pending', 'sent', 'failed', 'skipped')),
+  -- 'weekly' = stored for the Saturday combined digest (no per-day email is sent).
+  email_status text not null default 'pending' check (email_status in ('pending', 'sent', 'failed', 'skipped', 'weekly')),
   email_error text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
