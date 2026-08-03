@@ -1401,10 +1401,15 @@ function App() {
     // Students save one record per day. Facilitators save one review per student
     // per WEEK (or per MONTH), so a single review replaces seven daily entries.
     const idBase = form.studentName || "student";
-    // Never store a future date: a record must reflect a day that has happened, and the
-    // weekly digest looks back from today — future-dated rows would silently fall outside it.
+    // A record must reflect a day that has actually happened — the weekly digest looks
+    // back from today, so a future-dated row would silently fall outside it.
+    // Students log today only; facilitators may review a past week/month, never a future one.
     const todayStr = today();
-    const baseDate = !form.date || form.date > todayStr ? todayStr : form.date;
+    const baseDate = isStudent
+      ? todayStr
+      : !form.date || form.date > todayStr
+        ? todayStr
+        : form.date;
     let entryDate = baseDate;
     let entryPeriod = "day";
     let id = `${idBase}-${baseDate}`;
@@ -2091,7 +2096,8 @@ function StudentQuickFlow({
           <div className="grid gap-5">
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Student Name" value={form.studentName} onChange={(value) => update("studentName", value)} disabled />
-              <Field label="Date" type="date" value={form.date} max={today()} onChange={(value) => update("date", value)} />
+              {/* Students log today only — the date is fixed so a wrong day can't be picked. */}
+              <Field label="Date (today)" type="date" value={today()} disabled />
               <Field label="School / Batch Name" value={form.schoolName} onChange={(value) => update("schoolName", value)} placeholder="School or batch" />
               <Select label="Attendance" value={form.attendance} options={attendance} onChange={(value) => update("attendance", value)} />
               <Select label="Mood" value={form.mood} options={moods} onChange={(value) => update("mood", value)} />
