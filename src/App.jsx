@@ -1512,7 +1512,7 @@ function App() {
           <nav className="no-print mb-16 flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-[#e6dfd8] bg-[#faf9f5] py-3 dark:border-white/10 dark:bg-[#181715]">
             <div className="flex min-w-0 flex-wrap items-center gap-3">
               <span className="text-xl leading-none text-[#cc785c]">✣</span>
-              <span className="text-sm font-medium text-[#141413] dark:text-[#faf9f5]">Student Progress</span>
+              <span className="text-sm font-medium text-[#141413] dark:text-[#faf9f5]">Kadam</span>
               <span className="inline-flex h-9 items-center gap-2 rounded-full bg-[#efe9de] px-3 text-sm font-medium capitalize text-[#141413] dark:bg-[#252320] dark:text-[#faf9f5]">
                 <RoleIcon size={16} className="text-[#cc785c]" />
                 <span>{roleBadgeLabel}</span>
@@ -1563,8 +1563,9 @@ function App() {
                 {isFacilitator ? "Facilitator feedback workspace" : "Warm daily learning tracker"}
               </div>
               <h1 className="font-display max-w-3xl text-5xl font-normal leading-[1.05] tracking-[-0.03em] text-[#141413] dark:text-[#faf9f5] sm:text-6xl lg:text-[64px]">
-                Student Progress Tracker
+                Kadam
               </h1>
+              <p className="mt-3 text-lg font-medium text-[#cc785c]">Ek kadam roz — one step every day.</p>
               <p className="mt-6 max-w-xl text-lg leading-8 text-[#3d3d3a] dark:text-[#a09d96]">
                 {isFacilitator
                   ? "Review daily progress, add facilitator feedback, and see every student's daily, weekly, and monthly progress."
@@ -1970,9 +1971,10 @@ function LoginScreen({ onSignIn, error }) {
             Secure organisation login
           </div>
           <h1 className="font-display text-5xl font-normal leading-[1.05] tracking-[-0.03em] sm:text-[64px]">
-            Login to your progress tracker
+            Welcome to Kadam
           </h1>
-          <p className="mt-6 max-w-xl text-lg leading-8 text-[#3d3d3a]">
+          <p className="mt-4 text-lg font-medium text-[#cc785c]">Ek kadam roz — one step every day.</p>
+          <p className="mt-4 max-w-xl text-lg leading-8 text-[#3d3d3a]">
             Sign in with your NavGurukul Google account. Students fill their own daily progress; facilitators review every
             student's progress and add feedback.
           </p>

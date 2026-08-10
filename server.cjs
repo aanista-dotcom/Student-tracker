@@ -35,5 +35,5 @@ http
     });
   })
   .listen(port, "127.0.0.1", () => {
-    console.log(`Student Progress Tracker running at http://127.0.0.1:${port}`);
+    console.log(`Kadam — Daily Progress Tracker running at http://127.0.0.1:${port}`);
   });

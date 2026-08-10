@@ -65,7 +65,7 @@ supabase functions deploy daily-report
 CLI:
 ```bash
 supabase secrets set RESEND_API_KEY="re_xxx"
-supabase secrets set RESEND_FROM="Student Tracker <reports@navgurukul.org>"
+supabase secrets set RESEND_FROM="Kadam <reports@navgurukul.org>"
 supabase secrets set PROGRAM_HEAD_EMAILS="head1@navgurukul.org,head2@navgurukul.org"
 # optional AI wording (skip for the free built-in summary):
 supabase secrets set INCEPTION_API_KEY="your-inception-key"

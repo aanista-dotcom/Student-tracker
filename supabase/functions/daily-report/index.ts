@@ -8,7 +8,7 @@
 //
 // Secrets to set (Supabase -> Edge Functions -> Secrets):
 //   RESEND_API_KEY        Resend API key
-//   RESEND_FROM           verified sender, e.g. "Student Tracker <reports@yourdomain.org>"
+//   RESEND_FROM           verified sender, e.g. "Kadam <reports@yourdomain.org>"
 //                         (for first tests you can use "onboarding@resend.dev")
 //   PROGRAM_HEAD_EMAILS   comma-separated recipient list, e.g. "head1@navgurukul.org,head2@navgurukul.org"
 //   INCEPTION_API_KEY     Inception (Mercury) API key for the AI summary — OPTIONAL.
@@ -180,7 +180,7 @@ function buildEmailHtml(report: any, summary: any): string {
       ${list(summary.next_steps)}
     </div>
 
-    <p style="margin:18px 0 0;font-size:12px;color:#8e8b82">Sent automatically by the Student Progress Tracker. ${report.facilitatorComplete ? "" : "Facilitator review was still pending when this report was generated."}</p>
+    <p style="margin:18px 0 0;font-size:12px;color:#8e8b82">Sent automatically by Kadam, the daily progress tracker. ${report.facilitatorComplete ? "" : "Facilitator review was still pending when this report was generated."}</p>
   </div>`;
 }
 

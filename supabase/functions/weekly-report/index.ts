@@ -10,7 +10,7 @@
 //
 // Secrets (Supabase -> Edge Functions -> Secrets) — same ones the daily function uses:
 //   RESEND_API_KEY        Resend API key
-//   RESEND_FROM           verified sender, e.g. "Student Tracker <reports@navgurukul.org>"
+//   RESEND_FROM           verified sender, e.g. "Kadam <reports@navgurukul.org>"
 //   PROGRAM_HEAD_EMAILS   comma-separated recipient list
 //   INCEPTION_API_KEY     Inception (Mercury) key for the AI overview — OPTIONAL
 //   REPORT_MODEL          optional, defaults to "mercury-2"
@@ -221,14 +221,14 @@ function buildDigestHtml(students: StudentWeek[], rangeLabel: string, overview: 
 
   return `
   <div style="font-family:Inter,Arial,sans-serif;max-width:660px;margin:0 auto;background:#faf9f5;padding:24px;color:#141413">
-    <h2 style="margin:0 0 4px;font-size:22px">Weekly Progress Digest</h2>
+    <h2 style="margin:0 0 4px;font-size:22px">Kadam — Weekly Progress Digest</h2>
     <p style="margin:0 0 16px;color:#6c6a64">${escapeHtml(rangeLabel)} · ${students.length} student${students.length === 1 ? "" : "s"} · ${batchNames.length} batch${batchNames.length === 1 ? "" : "es"}</p>
     <div style="background:#181715;color:#faf9f5;border-radius:12px;padding:16px 18px;margin-bottom:8px">
       <span style="font-size:13px;opacity:.85">This week</span>
       <p style="margin:6px 0 0;font-size:14px;line-height:1.5">${escapeHtml(overview)}</p>
     </div>
     ${sections}
-    <p style="margin:22px 0 0;font-size:12px;color:#8e8b82">Sent automatically by the Student Progress Tracker. This digest replaces the per-day emails and covers ${escapeHtml(rangeLabel)}.</p>
+    <p style="margin:22px 0 0;font-size:12px;color:#8e8b82">Sent automatically by Kadam, the daily progress tracker. This digest replaces the per-day emails and covers ${escapeHtml(rangeLabel)}.</p>
   </div>`;
 }
 
@@ -294,7 +294,7 @@ Deno.serve(async (req) => {
 
   const overview = await aiOverview(students, rangeLabel);
   const html = buildDigestHtml(students, rangeLabel, overview);
-  const subject = `Weekly Progress Digest — ${rangeLabel} (${students.length} student${students.length === 1 ? "" : "s"})`;
+  const subject = `Kadam — Weekly Progress Digest — ${rangeLabel} (${students.length} student${students.length === 1 ? "" : "s"})`;
 
   const result = await sendEmail(html, subject, recipients);
   if (!result.ok) {
