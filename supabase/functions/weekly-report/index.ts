@@ -87,16 +87,61 @@ function insight(cats: StudentWeek["cats"]): { win: string; need: string } {
   return { win, need };
 }
 
+// Lowercase / trim / collapse inner spaces, so "SOSC", "sosc" and " sosc " match.
+function norm(value: unknown): string {
+  return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+// Most frequently used spelling of a value. Counting is case/space-insensitive so
+// "sosc" and "Sosc" reinforce each other rather than splitting the vote; the raw
+// spelling returned is the first one seen in that group. Rows arrive newest-first,
+// so ties resolve to the most recent spelling.
+function mostCommon(values: unknown[]): string {
+  const counts = new Map<string, { text: string; count: number }>();
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (!text) continue;
+    const key = norm(text);
+    const seen = counts.get(key);
+    if (seen) seen.count += 1;
+    else counts.set(key, { text, count: 1 });
+  }
+  let best = "";
+  let bestCount = 0;
+  for (const { text, count } of counts.values()) {
+    if (count > bestCount) {
+      best = text;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
 function rollUp(rows: any[]): StudentWeek[] {
+  // A student can type their batch differently from one day to the next ("sosc",
+  // "school of second chance", a typo). The key used to include the school, which
+  // split one student into several entries in the digest. Key on the student alone:
+  // their email where we have it, otherwise their normalised name.
+  const emailByName = new Map<string, string>();
+  for (const r of rows) {
+    const name = norm(r.student_name);
+    const email = norm(r.student_email);
+    if (name && email && !emailByName.has(name)) emailByName.set(name, email);
+  }
+
   const groups = new Map<string, any[]>();
   for (const r of rows) {
-    const key = `${(r.student_name || "Unnamed student").trim()}||${(r.school_name || "").trim()}`;
+    const name = norm(r.student_name);
+    const key = emailByName.get(name) || name || "unnamed student";
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(r);
   }
+
   const out: StudentWeek[] = [];
-  for (const [key, list] of groups) {
-    const [studentName, schoolName] = key.split("||");
+  for (const list of groups.values()) {
+    // Show the spelling the student used most often for their own name and batch.
+    const studentName = mostCommon(list.map((r) => r.student_name));
+    const schoolName = mostCommon(list.map((r) => r.school_name));
     const cats = {
       practicals: round(mean(list.map((r) => Number(r.category_scores?.practicals)))),
       english: round(mean(list.map((r) => Number(r.category_scores?.english)))),
@@ -201,18 +246,21 @@ function studentBlock(s: StudentWeek): string {
 
 function buildDigestHtml(students: StudentWeek[], rangeLabel: string, overview: string): string {
   // Group by batch/school, batches alphabetical, students by score desc within a batch.
+  // Grouping is on the normalised name so "SOSC" and "sosc" form one section; the
+  // heading shows the spelling most of that batch's students used.
   const batches = new Map<string, StudentWeek[]>();
   for (const s of students) {
-    const b = s.schoolName || "No batch";
-    if (!batches.has(b)) batches.set(b, []);
-    batches.get(b)!.push(s);
+    const key = norm(s.schoolName) || "no batch";
+    if (!batches.has(key)) batches.set(key, []);
+    batches.get(key)!.push(s);
   }
-  const batchNames = [...batches.keys()].sort((a, b) => a.localeCompare(b));
-  const sections = batchNames
-    .map((b) => {
-      const list = batches.get(b)!.sort((x, y) => y.avgOverall - x.avgOverall);
+  const batchKeys = [...batches.keys()].sort((a, b) => a.localeCompare(b));
+  const sections = batchKeys
+    .map((key) => {
+      const list = batches.get(key)!.sort((x, y) => y.avgOverall - x.avgOverall);
+      const heading = mostCommon(list.map((s) => s.schoolName)) || "No batch";
       return `
-        <h3 style="margin:22px 0 4px;font-size:16px;color:#141413">${escapeHtml(b)}
+        <h3 style="margin:22px 0 4px;font-size:16px;color:#141413">${escapeHtml(heading)}
           <span style="font-size:13px;font-weight:normal;color:#8e8b82"> · ${list.length} student${list.length === 1 ? "" : "s"}</span>
         </h3>
         ${list.map(studentBlock).join("")}`;
@@ -222,7 +270,7 @@ function buildDigestHtml(students: StudentWeek[], rangeLabel: string, overview: 
   return `
   <div style="font-family:Inter,Arial,sans-serif;max-width:660px;margin:0 auto;background:#faf9f5;padding:24px;color:#141413">
     <h2 style="margin:0 0 4px;font-size:22px">Kadam — Weekly Progress Digest</h2>
-    <p style="margin:0 0 16px;color:#6c6a64">${escapeHtml(rangeLabel)} · ${students.length} student${students.length === 1 ? "" : "s"} · ${batchNames.length} batch${batchNames.length === 1 ? "" : "es"}</p>
+    <p style="margin:0 0 16px;color:#6c6a64">${escapeHtml(rangeLabel)} · ${students.length} student${students.length === 1 ? "" : "s"} · ${batchKeys.length} batch${batchKeys.length === 1 ? "" : "es"}</p>
     <div style="background:#181715;color:#faf9f5;border-radius:12px;padding:16px 18px;margin-bottom:8px">
       <span style="font-size:13px;opacity:.85">This week</span>
       <p style="margin:6px 0 0;font-size:14px;line-height:1.5">${escapeHtml(overview)}</p>
@@ -274,11 +322,14 @@ Deno.serve(async (req) => {
   const endStr = ymd(end);
   const rangeLabel = `${prettyDate(startStr)} – ${prettyDate(endStr)}`;
 
+  // student_email is what lets us treat one student as one person even when they
+  // typed their batch differently; newest-first so the latest spelling wins any tie.
   const { data: rows, error } = await supabase
     .from("daily_reports")
-    .select("student_name, school_name, report_date, attendance, overall_score, category_scores, facilitator_complete")
+    .select("student_name, student_email, school_name, report_date, attendance, overall_score, category_scores, facilitator_complete")
     .gte("report_date", startStr)
-    .lte("report_date", endStr);
+    .lte("report_date", endStr)
+    .order("report_date", { ascending: false });
 
   if (error) return json({ error: error.message }, 500);
 
@@ -302,5 +353,11 @@ Deno.serve(async (req) => {
     return json({ ok: false, sent: false, error: result.error, students: students.length, range: rangeLabel }, 500);
   }
 
-  return json({ ok: true, sent: true, students: students.length, batches: new Set(students.map((s) => s.schoolName || "No batch")).size, range: rangeLabel });
+  return json({
+    ok: true,
+    sent: true,
+    students: students.length,
+    batches: new Set(students.map((s) => norm(s.schoolName) || "no batch")).size,
+    range: rangeLabel,
+  });
 });
