@@ -300,6 +300,10 @@ async function sendEmail(html: string, subject: string, recipients: string[]): P
 
 // ---- Handler --------------------------------------------------------------
 
+// Bumped whenever the digest logic changes, and returned in every response, so we can
+// confirm which build is actually deployed (pushing to GitHub does NOT deploy a function).
+const VERSION = "2026-09-29-one-row-per-student";
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -308,6 +312,10 @@ Deno.serve(async (req) => {
   if (cronSecret && req.headers.get("x-cron-secret") !== cronSecret) {
     return json({ error: "Unauthorized" }, 401);
   }
+
+  // ?dry=1 builds the digest and reports who would appear, WITHOUT emailing anyone.
+  // Lets us verify each student shows up exactly once without spamming Program Heads.
+  const dryRun = new URL(req.url).searchParams.get("dry") === "1";
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -335,7 +343,26 @@ Deno.serve(async (req) => {
 
   const students = rollUp(rows || []).sort((a, b) => b.avgOverall - a.avgOverall);
   if (!students.length) {
-    return json({ ok: true, sent: false, reason: "No student activity in the window.", range: rangeLabel });
+    return json({ ok: true, version: VERSION, sent: false, reason: "No student activity in the window.", range: rangeLabel });
+  }
+
+  // Dry run: show exactly who would appear, one line each, and send nothing.
+  if (dryRun) {
+    return json({
+      ok: true,
+      version: VERSION,
+      sent: false,
+      dryRun: true,
+      range: rangeLabel,
+      rowsRead: (rows || []).length,
+      studentsInEmail: students.length,
+      students: students.map((s) => ({
+        name: s.studentName,
+        batch: s.schoolName || "No batch",
+        avg: s.avgOverall,
+        present: `${s.daysPresent}/${s.daysLogged}`,
+      })),
+    });
   }
 
   const recipients = (Deno.env.get("PROGRAM_HEAD_EMAILS") || "")
@@ -350,11 +377,12 @@ Deno.serve(async (req) => {
   const result = await sendEmail(html, subject, recipients);
   if (!result.ok) {
     console.error("[weekly-report] Email send failed:", result.error);
-    return json({ ok: false, sent: false, error: result.error, students: students.length, range: rangeLabel }, 500);
+    return json({ ok: false, version: VERSION, sent: false, error: result.error, students: students.length, range: rangeLabel }, 500);
   }
 
   return json({
     ok: true,
+    version: VERSION,
     sent: true,
     students: students.length,
     batches: new Set(students.map((s) => norm(s.schoolName) || "no batch")).size,
