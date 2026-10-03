@@ -11,7 +11,12 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind is served from our own site, NOT cdn.tailwindcss.com. That CDN is
+         blocked by some school/office networks and ad-blockers, and when it fails the
+         page loses every style and renders as unreadable overlapping text. Serving it
+         from the same origin removes that dependency. Pinned copy of Tailwind 3.4.17;
+         to update, re-download https://cdn.tailwindcss.com/<version> into vendor/. -->
+    <script src="./vendor/tailwind.js"></script>
     <script>
       tailwind.config = {
         darkMode: "class",
